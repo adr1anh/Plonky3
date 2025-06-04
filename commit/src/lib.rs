@@ -8,9 +8,7 @@ mod adapters;
 mod domain;
 mod mmcs;
 mod pcs;
-
-#[cfg(any(test, feature = "test-utils"))]
-pub mod testing;
+pub mod trivial;
 
 pub use adapters::*;
 pub use domain::*;

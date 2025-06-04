@@ -21,7 +21,7 @@ serde = { workspace = true, features = ["derive", "alloc"] }
 p3-baby-bear.workspace = true
 p3-challenger.workspace = true
 p3-circle.workspace = true
-p3-commit = { workspace = true, features = ["test-utils"] }
+p3-commit.workspace = true
 p3-dft.workspace = true
 p3-fri.workspace = true
 p3-keccak.workspace = true
