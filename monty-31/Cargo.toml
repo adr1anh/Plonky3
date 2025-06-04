@@ -24,3 +24,4 @@ transpose.workspace = true
 
 [features]
 nightly-features = []
+parallel = ["p3-maybe-rayon/parallel"]

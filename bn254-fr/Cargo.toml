@@ -28,6 +28,7 @@ table = [
     "halo2curves/bn256-table",
 ] # Generate cached table of [0, 2^16) in Bn254Fr at compile time
 asm = ["halo2curves/asm"]
+parallel-testing = ["p3-field-testing/parallel-testing"]
 
 [[bench]]
 name = "bench_field"

@@ -27,6 +27,7 @@ rand_xoshiro.workspace = true
 
 [features]
 nightly-features = []
+parallel-testing = ["p3-field-testing/parallel-testing"]
 
 [[bench]]
 name = "bench_field"

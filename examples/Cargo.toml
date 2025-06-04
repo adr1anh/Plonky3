@@ -24,6 +24,8 @@ p3-poseidon2-air.workspace = true
 p3-symmetric.workspace = true
 p3-uni-stark.workspace = true
 
+p3-maybe-rayon = { workspace = true, optional = true }
+
 bincode = { workspace = true, features = ["serde", "alloc"] }
 clap.workspace = true
 rand.workspace = true
@@ -46,3 +48,4 @@ nightly-features = [
     "p3-koala-bear/nightly-features",
     "p3-mersenne-31/nightly-features",
 ]
+parallel = ["p3-maybe-rayon/parallel"]

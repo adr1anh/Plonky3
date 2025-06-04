@@ -14,3 +14,10 @@ criterion.workspace = true
 num-bigint.workspace = true
 rand.workspace = true
 
+[features]
+parallel-testing = [
+    "p3-dft/parallel",
+    "p3-field/parallel",
+    "p3-matrix/parallel",
+    "p3-util/parallel",
+]

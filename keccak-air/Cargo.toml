@@ -34,7 +34,6 @@ tracing-forest = { workspace = true, features = ["ansi", "smallvec"] }
 tracing-subscriber = { workspace = true, features = ["std", "env-filter"] }
 
 [features]
-parallel = ["p3-maybe-rayon/parallel"]
 asm = ["p3-sha256/asm"]
 nightly-features = [
     "p3-goldilocks/nightly-features",
@@ -42,3 +41,4 @@ nightly-features = [
     "p3-baby-bear/nightly-features",
     "p3-mersenne-31/nightly-features",
 ]
+parallel = ["p3-maybe-rayon/parallel"]

@@ -25,6 +25,7 @@ serde_json.workspace = true
 
 [features]
 nightly-features = ["p3-monty-31/nightly-features"]
+parallel-testing = ["p3-field-testing/parallel-testing"]
 
 [[bench]]
 name = "bench_field"
