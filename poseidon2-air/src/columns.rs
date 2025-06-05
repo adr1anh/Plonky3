@@ -160,3 +160,29 @@ impl<
         &mut shorts[0]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::num_cols;
+    use p3_goldilocks::Goldilocks;
+    use p3_poseidon2::poseidon2_round_numbers_128;
+
+    #[test]
+    fn goldilocks_deg_7() {
+        const WIDTH: usize = 12;
+        const DEG: u64 = 7;
+        const N_FULL_HALF: usize = 4;
+        const N_PARTIAL: usize = 22;
+
+        let (n_full, n_partial) = poseidon2_round_numbers_128::<Goldilocks>(WIDTH, DEG).unwrap();
+        let n_full_half = n_full / 2;
+        assert_eq!(n_full_half, N_FULL_HALF);
+        assert_eq!(n_partial, N_PARTIAL);
+
+        let n_deg_9 = num_cols::<WIDTH, DEG, 0, N_FULL_HALF, N_PARTIAL>();
+        assert_eq!(n_deg_9, 131);
+
+        let n_deg_2 = num_cols::<WIDTH, DEG, 1, N_FULL_HALF, N_PARTIAL>();
+        assert_eq!(n_deg_2, 249);
+    }
+}
