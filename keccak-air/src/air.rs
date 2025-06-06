@@ -209,3 +209,21 @@ impl<AB: AirBuilder> Air<AB> for KeccakAir {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::{KeccakAir, KeccakCols};
+    use p3_baby_bear::BabyBear;
+    use p3_uni_stark::{SymbolicAirBuilder, get_symbolic_constraints};
+
+    #[test]
+    fn test_width() {
+        let width = size_of::<KeccakCols<u8>>();
+        let air = KeccakAir {};
+        let constraints = get_symbolic_constraints::<BabyBear, _>(&air, 0, 0);
+        let num_constraints = constraints.len();
+
+        assert_eq!(num_constraints, 3182);
+        assert_eq!(width, 2633)
+    }
+}
