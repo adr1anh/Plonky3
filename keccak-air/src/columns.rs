@@ -146,3 +146,14 @@ impl<T> BorrowMut<KeccakCols<T>> for [T] {
         &mut shorts[0]
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::KeccakCols;
+
+    #[test]
+    fn test_width() {
+        let width = size_of::<KeccakCols<u8>>();
+        assert_eq!(width, 2633)
+    }
+}
