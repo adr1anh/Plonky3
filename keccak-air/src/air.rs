@@ -214,7 +214,7 @@ impl<AB: AirBuilder> Air<AB> for KeccakAir {
 mod test {
     use crate::{KeccakAir, KeccakCols};
     use p3_baby_bear::BabyBear;
-    use p3_uni_stark::{SymbolicAirBuilder, get_symbolic_constraints};
+    use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression, get_symbolic_constraints};
 
     #[test]
     fn test_width() {
@@ -222,6 +222,8 @@ mod test {
         let air = KeccakAir {};
         let constraints = get_symbolic_constraints::<BabyBear, _>(&air, 0, 0);
         let num_constraints = constraints.len();
+        let num_ops: usize = constraints.iter().map(SymbolicExpression::count_ops).sum();
+        assert_eq!(num_ops, 177746309);
 
         assert_eq!(num_constraints, 3182);
         assert_eq!(width, 2633)

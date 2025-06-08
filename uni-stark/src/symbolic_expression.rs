@@ -57,6 +57,16 @@ impl<F> SymbolicExpression<F> {
             } => *degree_multiple,
         }
     }
+
+    pub fn count_ops(&self) -> usize {
+        match self {
+            Self::Add { x, y, .. } | Self::Sub { x, y, .. } | Self::Mul { x, y, .. } => {
+                x.count_ops() + y.count_ops() + 1
+            }
+            Self::Neg { x, .. } => x.count_ops() + 1,
+            _ => 0,
+        }
+    }
 }
 
 impl<F: Field> Default for SymbolicExpression<F> {
