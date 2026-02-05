@@ -193,37 +193,38 @@ where
     Radix2DitParallel<F>:
         TwoAdicSubgroupDft<F, Evaluations = BitReversedMatrixView<RowMajorMatrix<F>>>,
 {
+    type Coefficients = RowMajorMatrix<F>;
     type Evaluations = MaybeBitreversedMatrix<F>;
 
     #[inline]
-    fn dft_batch(&self, mat: RowMajorMatrix<F>) -> Self::Evaluations {
+    fn dft_batch(&self, coefficients: RowMajorMatrix<F>) -> Self::Evaluations {
         match self {
-            Self::Recursive(inner_dft) => inner_dft.dft_batch(mat).into(),
-            Self::Parallel(inner_dft) => inner_dft.dft_batch(mat).into(),
-            Self::SmallBatch(inner_dft) => inner_dft.dft_batch(mat).into(),
+            Self::Recursive(inner_dft) => inner_dft.dft_batch(coefficients.into()).into(),
+            Self::Parallel(inner_dft) => inner_dft.dft_batch(coefficients.into()).into(),
+            Self::SmallBatch(inner_dft) => inner_dft.dft_batch(coefficients.into()).into(),
         }
     }
 
     #[inline]
-    fn coset_dft_batch(&self, mat: RowMajorMatrix<F>, shift: F) -> Self::Evaluations {
+    fn coset_dft_batch(&self, coefficients: RowMajorMatrix<F>, shift: F) -> Self::Evaluations {
         match self {
-            Self::Recursive(inner_dft) => inner_dft.coset_dft_batch(mat, shift).into(),
-            Self::Parallel(inner_dft) => inner_dft.coset_dft_batch(mat, shift).into(),
-            Self::SmallBatch(inner_dft) => inner_dft.coset_dft_batch(mat, shift).into(),
+            Self::Recursive(inner_dft) => inner_dft.coset_dft_batch(coefficients, shift).into(),
+            Self::Parallel(inner_dft) => inner_dft.coset_dft_batch(coefficients, shift).into(),
+            Self::SmallBatch(inner_dft) => inner_dft.coset_dft_batch(coefficients, shift).into(),
         }
     }
 
     #[inline]
     fn coset_lde_batch(
         &self,
-        mat: RowMajorMatrix<F>,
+        evaluations: RowMajorMatrix<F>,
         added_bits: usize,
         shift: F,
     ) -> Self::Evaluations {
         match self {
-            Self::Recursive(inner_dft) => inner_dft.coset_lde_batch(mat, added_bits, shift).into(),
-            Self::Parallel(inner_dft) => inner_dft.coset_lde_batch(mat, added_bits, shift).into(),
-            Self::SmallBatch(inner_dft) => inner_dft.coset_lde_batch(mat, added_bits, shift).into(),
+            Self::Recursive(inner_dft) => inner_dft.coset_lde_batch(evaluations, added_bits, shift).into(),
+            Self::Parallel(inner_dft) => inner_dft.coset_lde_batch(evaluations, added_bits, shift).into(),
+            Self::SmallBatch(inner_dft) => inner_dft.coset_lde_batch(evaluations, added_bits, shift).into(),
         }
     }
 }

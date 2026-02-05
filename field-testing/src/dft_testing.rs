@@ -16,9 +16,9 @@ where
     let mut rng = SmallRng::seed_from_u64(1);
     for log_h in 0..5 {
         let h = 1 << log_h;
-        let mat = RowMajorMatrix::<F>::rand(&mut rng, h, 3);
-        let dft_naive = NaiveDft.dft_batch(mat.clone());
-        let dft_result = dft.dft_batch(mat);
+        let coefficients = RowMajorMatrix::<F>::rand(&mut rng, h, 3);
+        let dft_naive = NaiveDft.dft_batch(coefficients.clone());
+        let dft_result = dft.dft_batch(coefficients.into());
         assert_eq!(dft_naive, dft_result.to_row_major_matrix());
     }
 }
@@ -122,7 +122,7 @@ where
     for log_h in 0..5 {
         let h = 1 << log_h;
         let original = RowMajorMatrix::<F>::rand(&mut rng, h, 3);
-        let dft_output = dft.dft_batch(original.clone());
+        let dft_output = dft.dft_batch(original.clone().into());
         let idft_output = dft.idft_batch(dft_output.to_row_major_matrix());
         assert_eq!(original, idft_output.to_row_major_matrix());
     }

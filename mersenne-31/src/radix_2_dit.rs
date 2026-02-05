@@ -15,20 +15,22 @@ type C = Complex<F>;
 pub struct Mersenne31ComplexRadix2Dit;
 
 impl TwoAdicSubgroupDft<C> for Mersenne31ComplexRadix2Dit {
+    type Coefficients = RowMajorMatrix<C>;
     type Evaluations = RowMajorMatrix<C>;
-    fn dft_batch(&self, mut mat: RowMajorMatrix<C>) -> RowMajorMatrix<C> {
-        let h = mat.height();
+
+    fn dft_batch(&self, mut coefficients: RowMajorMatrix<C>) -> RowMajorMatrix<C> {
+        let h = coefficients.height();
         let log_h = log2_strict_usize(h);
 
         let root = C::two_adic_generator(log_h);
         let twiddles = root.powers().collect_n(h / 2);
 
         // DIT butterfly
-        reverse_matrix_index_bits(&mut mat);
+        reverse_matrix_index_bits(&mut coefficients);
         for layer in 0..log_h {
-            dit_layer(&mut mat.as_view_mut(), layer, &twiddles);
+            dit_layer(&mut coefficients.as_view_mut(), layer, &twiddles);
         }
-        mat
+        coefficients
     }
 }
 

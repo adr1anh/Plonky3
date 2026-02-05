@@ -18,62 +18,64 @@ use crate::util::divide_by_height;
 pub struct Radix2Bowers;
 
 impl<F: TwoAdicField> TwoAdicSubgroupDft<F> for Radix2Bowers {
+    type Coefficients = RowMajorMatrix<F>;
     type Evaluations = RowMajorMatrix<F>;
 
-    fn dft_batch(&self, mut mat: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
-        reverse_matrix_index_bits(&mut mat);
-        bowers_g(&mut mat.as_view_mut());
-        mat
+    fn dft_batch(&self, mut coefficients: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
+        reverse_matrix_index_bits(&mut coefficients);
+        bowers_g(&mut coefficients.as_view_mut());
+        coefficients
     }
 
-    /// Compute the inverse DFT of each column in `mat`.
-    fn idft_batch(&self, mut mat: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
-        bowers_g_t(&mut mat.as_view_mut());
-        divide_by_height(&mut mat);
-        reverse_matrix_index_bits(&mut mat);
-        mat
+    /// Compute the inverse DFT of each column in `evaluations`.
+    fn idft_batch(&self, mut evaluations: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
+        bowers_g_t(&mut evaluations.as_view_mut());
+        divide_by_height(&mut evaluations);
+        reverse_matrix_index_bits(&mut evaluations);
+        evaluations
     }
 
-    fn lde_batch(&self, mut mat: RowMajorMatrix<F>, added_bits: usize) -> RowMajorMatrix<F> {
-        bowers_g_t(&mut mat.as_view_mut());
-        divide_by_height(&mut mat);
-        mat = mat.bit_reversed_zero_pad(added_bits);
-        bowers_g(&mut mat.as_view_mut());
-        mat
+    fn lde_batch(&self, mut evaluations: RowMajorMatrix<F>, added_bits: usize) -> RowMajorMatrix<F> {
+        bowers_g_t(&mut evaluations.as_view_mut());
+        divide_by_height(&mut evaluations);
+        evaluations = evaluations.bit_reversed_zero_pad(added_bits);
+        bowers_g(&mut evaluations.as_view_mut());
+        evaluations
     }
 
-    #[instrument(skip_all, level = "debug", fields(dims = %mat.dimensions(), added_bits))]
+    #[instrument(skip_all, level = "debug", fields(dims = %evaluations.dimensions(), added_bits))]
     fn coset_lde_batch(
         &self,
-        mut mat: RowMajorMatrix<F>,
+        mut evaluations: RowMajorMatrix<F>,
         added_bits: usize,
         shift: F,
     ) -> RowMajorMatrix<F> {
-        let h = mat.height();
+        let h = evaluations.height();
         let log_h = log2_strict_usize(h);
         // It's cheaper to use div_2exp_u64 as this usually avoids an inversion.
         // It's also cheaper to work in the PrimeSubfield whenever possible.
         let h_inv_subfield = F::PrimeSubfield::ONE.div_2exp_u64(log_h as u64);
         let h_inv = F::from_prime_subfield(h_inv_subfield);
 
-        bowers_g_t(&mut mat.as_view_mut());
+        bowers_g_t(&mut evaluations.as_view_mut());
 
         // Rescale coefficients in two ways:
         // - divide by height (since we're doing an inverse DFT)
         // - multiply by powers of the coset shift (see default coset LDE impl for an explanation)
         let mut weights = shift.shifted_powers(h_inv).collect_n(h);
-        // reverse_bits because mat is encoded in bit-reversed order
+        // reverse_bits because evaluations is encoded in bit-reversed order
         reverse_slice_index_bits(&mut weights);
 
-        mat.par_rows_mut()
+        evaluations
+            .par_rows_mut()
             .zip(weights.into_par_iter())
             .for_each(|(row, weight)| row.iter_mut().for_each(|elem| *elem *= weight));
 
-        mat = mat.bit_reversed_zero_pad(added_bits);
+        evaluations = evaluations.bit_reversed_zero_pad(added_bits);
 
-        bowers_g(&mut mat.as_view_mut());
+        bowers_g(&mut evaluations.as_view_mut());
 
-        mat
+        evaluations
     }
 }
 

@@ -143,9 +143,16 @@ where
 }
 
 impl<F: TwoAdicField + Ord> TwoAdicSubgroupDft<F> for Radix2DitParallel<F> {
+    type Coefficients = RowMajorMatrix<F>;
     type Evaluations = BitReversedMatrixView<RowMajorMatrix<F>>;
 
-    fn dft_batch(&self, mut mat: RowMajorMatrix<F>) -> Self::Evaluations {
+    fn dft_batch(&self, coefficients: RowMajorMatrix<F>) -> Self::Evaluations {
+        // Convert coefficients to bit-reversed order for the first half of the algorithm.
+        // If a caller passes a BitReversedMatrixView that has been converted to RowMajorMatrix,
+        // this operation will have already happened. In the future, we could accept
+        // BitReversedMatrixView directly to skip this step entirely.
+        let mut mat = coefficients.bit_reverse_rows().to_row_major_matrix();
+
         let h = mat.height();
         let log_h = log2_strict_usize(h);
 
@@ -154,8 +161,7 @@ impl<F: TwoAdicField + Ord> TwoAdicSubgroupDft<F> for Radix2DitParallel<F> {
 
         let mid = log_h.div_ceil(2);
 
-        // The first half looks like a normal DIT.
-        reverse_matrix_index_bits(&mut mat);
+        // The first half looks like a normal DIT. Input is already in bit-reversed order.
         first_half(&mut mat, mid, &twiddles.twiddles);
 
         // For the second half, we flip the DIT, working in bit-reversed order.
@@ -165,47 +171,47 @@ impl<F: TwoAdicField + Ord> TwoAdicSubgroupDft<F> for Radix2DitParallel<F> {
         mat.bit_reverse_rows()
     }
 
-    #[instrument(skip_all, level = "debug", fields(dims = %mat.dimensions(), added_bits = added_bits))]
+    #[instrument(skip_all, level = "debug", fields(dims = %evaluations.dimensions(), added_bits = added_bits))]
     fn coset_lde_batch(
         &self,
-        mut mat: RowMajorMatrix<F>,
+        mut evaluations: RowMajorMatrix<F>,
         added_bits: usize,
         shift: F,
     ) -> Self::Evaluations {
-        let w = mat.width;
-        let h = mat.height();
+        let w = evaluations.width;
+        let h = evaluations.height();
         let log_h = log2_strict_usize(h);
         let mid = log_h.div_ceil(2);
 
         let inverse_twiddles = self.get_or_compute_inverse_twiddles(log_h);
 
         // The first half looks like a normal DIT.
-        reverse_matrix_index_bits(&mut mat);
-        first_half(&mut mat, mid, &inverse_twiddles.twiddles);
+        reverse_matrix_index_bits(&mut evaluations);
+        first_half(&mut evaluations, mid, &inverse_twiddles.twiddles);
 
         // For the second half, we flip the DIT, working in bit-reversed order.
-        reverse_matrix_index_bits(&mut mat);
+        reverse_matrix_index_bits(&mut evaluations);
         // We'll also scale by 1/h, as per the usual inverse DFT algorithm.
         // If F isn't a PrimeField, (and is thus an extension field) it's much cheaper to
         // invert in F::PrimeSubfield.
         let h_inv_subfield = F::PrimeSubfield::from_int(h).try_inverse();
         let scale = h_inv_subfield.map(F::from_prime_subfield);
-        second_half(&mut mat, mid, &inverse_twiddles.bitrev_twiddles, scale);
+        second_half(&mut evaluations, mid, &inverse_twiddles.bitrev_twiddles, scale);
         // We skip the final bit-reversal, since the next FFT expects bit-reversed input.
 
         let lde_elems = w * (h << added_bits);
         let elems_to_add = lde_elems - w * h;
-        debug_span!("reserve_exact").in_scope(|| mat.values.reserve_exact(elems_to_add));
+        debug_span!("reserve_exact").in_scope(|| evaluations.values.reserve_exact(elems_to_add));
 
         let g_big = F::two_adic_generator(log_h + added_bits);
 
-        let mat_ptr = mat.values.as_mut_ptr();
-        let rest_ptr = unsafe { (mat_ptr as *mut MaybeUninit<F>).add(w * h) };
-        let first_slice: &mut [F] = unsafe { slice::from_raw_parts_mut(mat_ptr, w * h) };
+        let coefficients_ptr = evaluations.values.as_mut_ptr();
+        let rest_ptr = unsafe { (coefficients_ptr as *mut MaybeUninit<F>).add(w * h) };
+        let first_slice: &mut [F] = unsafe { slice::from_raw_parts_mut(coefficients_ptr, w * h) };
         let rest_slice: &mut [MaybeUninit<F>] =
             unsafe { slice::from_raw_parts_mut(rest_ptr, lde_elems - w * h) };
-        let mut first_coset_mat = RowMajorMatrixViewMut::new(first_slice, w);
-        let mut rest_cosets_mat = rest_slice
+        let mut first_coset_coefficients = RowMajorMatrixViewMut::new(first_slice, w);
+        let mut rest_cosets_evals = rest_slice
             .chunks_exact_mut(w * h)
             .map(|slice| RowMajorMatrixViewMut::new(slice, w))
             .collect_vec();
@@ -213,18 +219,18 @@ impl<F: TwoAdicField + Ord> TwoAdicSubgroupDft<F> for Radix2DitParallel<F> {
         for coset_idx in 1..(1 << added_bits) {
             let total_shift = g_big.exp_u64(coset_idx as u64) * shift;
             let coset_idx = reverse_bits_len(coset_idx, added_bits);
-            let dest = &mut rest_cosets_mat[coset_idx - 1]; // - 1 because we removed the first matrix.
-            coset_dft_oop(self, &first_coset_mat.as_view(), dest, total_shift);
+            let dest = &mut rest_cosets_evals[coset_idx - 1]; // - 1 because we removed the first matrix.
+            coset_dft_oop(self, &first_coset_coefficients.as_view(), dest, total_shift);
         }
 
         // Now run a forward DFT on the very first coset, this time in-place.
-        coset_dft(self, &mut first_coset_mat.as_view_mut(), shift);
+        coset_dft(self, &mut first_coset_coefficients.as_view_mut(), shift);
 
         // SAFETY: We wrote all values above.
         unsafe {
-            mat.values.set_len(lde_elems);
+            evaluations.values.set_len(lde_elems);
         }
-        BitReversalPerm::new_view(mat)
+        BitReversalPerm::new_view(evaluations)
     }
 }
 

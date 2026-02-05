@@ -125,11 +125,12 @@ impl<F> TwoAdicSubgroupDft<F> for Radix2DFTSmallBatch<F>
 where
     F: TwoAdicField,
 {
+    type Coefficients = RowMajorMatrix<F>;
     type Evaluations = RowMajorMatrix<F>;
 
-    fn dft_batch(&self, mut mat: RowMajorMatrix<F>) -> Self::Evaluations {
-        let h = mat.height();
-        let w = mat.width();
+    fn dft_batch(&self, mut coefficients: RowMajorMatrix<F>) -> Self::Evaluations {
+        let h = coefficients.height();
+        let w = coefficients.width();
         let log_h = log2_strict_usize(h);
 
         self.update_twiddles(h);
@@ -157,14 +158,14 @@ where
             .map(|slice| unsafe { as_base_slice::<DitButterfly<F>, F>(slice) }) // Safe as DitButterfly is #[repr(transparent)]
             .tuples()
         {
-            dft_layer_par_triple(&mut mat.as_view_mut(), dit_0, dit_1, dit_2, multi_layer_dit);
+            dft_layer_par_triple(&mut coefficients.as_view_mut(), dit_0, dit_1, dit_2, multi_layer_dit);
         }
 
         // If the total number of layers is not a multiple of `LAYERS_PER_GROUP`,
         // we need to handle the remaining layers separately.
         let corr = (log_h - log_num_par_rows) % LAYERS_PER_GROUP;
         dft_layer_par_extra_layers(
-            &mut mat.as_view_mut(),
+            &mut coefficients.as_view_mut(),
             &root_table[log_num_par_rows..log_num_par_rows + corr],
             multi_layer_dit,
         );
@@ -172,16 +173,16 @@ where
         // Once the blocks are small enough, we can split the matrix
         // into chunks of size `chunk_size` and process them in parallel.
         // This avoids passing data between threads, which can be expensive.
-        par_remaining_layers(&mut mat.values, chunk_size, &root_table[..log_num_par_rows]);
+        par_remaining_layers(&mut coefficients.values, chunk_size, &root_table[..log_num_par_rows]);
 
         // Finally we bit-reverse the matrix to ensure the output is in the correct order.
-        reverse_matrix_index_bits(&mut mat);
-        mat
+        reverse_matrix_index_bits(&mut coefficients);
+        coefficients
     }
 
-    fn idft_batch(&self, mut mat: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
-        let h = mat.height();
-        let w = mat.width();
+    fn idft_batch(&self, mut evaluations: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
+        let h = evaluations.height();
+        let w = evaluations.width();
         let log_h = log2_strict_usize(h);
 
         self.update_twiddles(h);
@@ -202,7 +203,7 @@ where
         let chunk_size = num_par_rows * w;
 
         // Need to start by bit-reversing the matrix.
-        reverse_matrix_index_bits(&mut mat);
+        reverse_matrix_index_bits(&mut evaluations);
 
         // For the initial blocks, they are small enough that we can split the matrix
         // into chunks of size `chunk_size` and process them in parallel.
@@ -210,7 +211,7 @@ where
         // We also divide by the height of the matrix while the data is nicely partitioned
         // on each core.
         par_initial_layers(
-            &mut mat.values,
+            &mut evaluations.values,
             chunk_size,
             &root_table[..log_num_par_rows],
             log_h,
@@ -225,7 +226,7 @@ where
         // we need to handle the initial layers separately.
         let corr = (log_h - log_num_par_rows) % LAYERS_PER_GROUP;
         dft_layer_par_extra_layers(
-            &mut mat.as_view_mut(),
+            &mut evaluations.as_view_mut(),
             &root_table[log_num_par_rows..log_num_par_rows + corr],
             multi_layer_dif,
         );
@@ -237,20 +238,20 @@ where
             .map(|slice| unsafe { as_base_slice::<DifButterfly<F>, F>(slice) }) // Safe as DifButterfly is #[repr(transparent)]
             .tuples()
         {
-            dft_layer_par_triple(&mut mat.as_view_mut(), dif_2, dif_1, dif_0, multi_layer_dif);
+            dft_layer_par_triple(&mut evaluations.as_view_mut(), dif_2, dif_1, dif_0, multi_layer_dif);
         }
 
-        mat
+        evaluations
     }
 
     fn coset_lde_batch(
         &self,
-        mut mat: RowMajorMatrix<F>,
+        mut evaluations: RowMajorMatrix<F>,
         added_bits: usize,
         shift: F,
     ) -> Self::Evaluations {
-        let h = mat.height();
-        let w = mat.width();
+        let h = evaluations.height();
+        let w = evaluations.width();
         let log_h = log2_strict_usize(h);
 
         self.update_twiddles(h << added_bits);
@@ -301,23 +302,23 @@ where
             .map(|slice| unsafe { as_base_slice::<DitButterfly<F>, F>(slice) }) // Safe as DitButterfly is #[repr(transparent)]
             .tuples()
         {
-            dft_layer_par_triple(&mut mat.as_view_mut(), dit_0, dit_1, dit_2, multi_layer_dit);
+            dft_layer_par_triple(&mut evaluations.as_view_mut(), dit_0, dit_1, dit_2, multi_layer_dit);
         }
 
         // If the total number of layers is not a multiple of `LAYERS_PER_GROUP`,
         // we need to handle the remaining layers separately.
         let corr = (log_h - num_inner_dit_layers) % LAYERS_PER_GROUP;
         dft_layer_par_extra_layers(
-            &mut mat.as_view_mut(),
+            &mut evaluations.as_view_mut(),
             &inv_root_table[num_inner_dit_layers..num_inner_dit_layers + corr],
             multi_layer_dit,
         );
 
         // Now do all the inner layers at once. This does the final `log_num_par_rows` of
-        // the initial transformation, then copies the values of mat to output, scales then
+        // the initial transformation, then copies the values of evaluations to output, scales then
         // and does the first `log_num_par_rows + added_bits` layers of the final transformation.
         par_middle_layers(
-            &mut mat.as_view_mut(),
+            &mut evaluations.as_view_mut(),
             &mut out.as_view_mut(),
             num_par_rows,
             &root_table[..(num_inner_dif_layers)],

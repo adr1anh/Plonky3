@@ -25,6 +25,20 @@ use crate::util::{coset_shift_cols, divide_by_height};
 /// parallel feature) different implementation may be faster. Hence depending on your use case
 /// you may want to be using `Radix2Dit, Radix2DitParallel, RecursiveDft` or `Radix2Bowers`.
 pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
+    /// The matrix type used to store the input coefficients for a batched DFT operation.
+    ///
+    /// This type represents a matrix of field elements containing polynomial coefficients.
+    /// It must implement `BitReversibleMatrix` to allow efficient conversion between
+    /// natural and bit-reversed row orderings.
+    ///
+    /// Most implementations use `RowMajorMatrix<F>` for natural-order input, but some
+    /// algorithms (like `Radix2DitParallel`) can accept `BitReversedMatrixView<RowMajorMatrix<F>>`
+    /// to skip an initial bit-reversal step when the input is already in bit-reversed order.
+    ///
+    /// The `From<RowMajorMatrix<F>>` bound ensures that default implementations can
+    /// create coefficients from a `RowMajorMatrix`.
+    type Coefficients: BitReversibleMatrix<F> + From<RowMajorMatrix<F>> + 'static;
+
     /// The matrix type used to store the result of a batched DFT operation.
     ///
     /// This type represents a matrix of field elements, used to hold the evaluations
@@ -36,29 +50,29 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// `BitReversedMatrixView<RowMajorMatrix<F>>` to allow in-place bit-reversed access.
     type Evaluations: BitReversibleMatrix<F> + 'static;
 
-    /// Compute the discrete Fourier transform (DFT) of `vec`.
+    /// Compute the discrete Fourier transform (DFT) of `coefficients`.
     ///
     /// #### Mathematical Description
     ///
-    /// Let `H` denote the unique multiplicative subgroup of order `vec.len()`.
-    /// Treating `vec` as coefficients of a polynomial, compute the evaluations
+    /// Let `H` denote the unique multiplicative subgroup of order `coefficients.len()`.
+    /// Treating `coefficients` as coefficients of a polynomial, compute the evaluations
     /// of that polynomial on the subgroup `H`.
-    fn dft(&self, vec: Vec<F>) -> Vec<F> {
-        self.dft_batch(RowMajorMatrix::new_col(vec))
+    fn dft(&self, coefficients: Vec<F>) -> Vec<F> {
+        self.dft_batch(RowMajorMatrix::new_col(coefficients).into())
             .to_row_major_matrix()
             .values
     }
 
-    /// Compute the discrete Fourier transform (DFT) of each column in `mat`.
+    /// Compute the discrete Fourier transform (DFT) of each column in `coefficients`.
     /// This is the only method an implementer needs to define, all other
     /// methods can be derived from this one.
     ///
     /// #### Mathematical Description
     ///
-    /// Let `H` denote the unique multiplicative subgroup of order `mat.height()`.
-    /// Treating each column of `mat` as the coefficients of a polynomial, compute the
+    /// Let `H` denote the unique multiplicative subgroup of order `coefficients.height()`.
+    /// Treating each column of `coefficients` as the coefficients of a polynomial, compute the
     /// evaluations of those polynomials on the subgroup `H`.
-    fn dft_batch(&self, mat: RowMajorMatrix<F>) -> Self::Evaluations;
+    fn dft_batch(&self, coefficients: Self::Coefficients) -> Self::Evaluations;
 
     /// Compute the "coset DFT" of `vec`.
     ///
@@ -73,21 +87,21 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
             .values
     }
 
-    /// Compute the "coset DFT" of each column in `mat`.
+    /// Compute the "coset DFT" of each column in `coefficients`.
     ///
     /// #### Mathematical Description
     ///
-    /// Let `H` denote the unique multiplicative subgroup of order `mat.height()`.
-    /// Treating each column of `mat` as the coefficients of a polynomial, compute the
+    /// Let `H` denote the unique multiplicative subgroup of order `coefficients.height()`.
+    /// Treating each column of `coefficients` as the coefficients of a polynomial, compute the
     /// evaluations of those polynomials on the coset `shift * H`.
-    fn coset_dft_batch(&self, mut mat: RowMajorMatrix<F>, shift: F) -> Self::Evaluations {
+    fn coset_dft_batch(&self, mut coefficients: RowMajorMatrix<F>, shift: F) -> Self::Evaluations {
         // Observe that
         //     y_i = \sum_j c_j (s g^i)^j
         //         = \sum_j (c_j s^j) (g^i)^j
         // which has the structure of an ordinary DFT, except each coefficient `c_j` is first replaced
         // by `c_j s^j`.
-        coset_shift_cols(&mut mat, shift);
-        self.dft_batch(mat)
+        coset_shift_cols(&mut coefficients, shift);
+        self.dft_batch(coefficients.into())
     }
 
     /// Compute the inverse DFT of `vec`.
@@ -101,24 +115,24 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         self.idft_batch(RowMajorMatrix::new_col(vec)).values
     }
 
-    /// Compute the inverse DFT of each column in `mat`.
+    /// Compute the inverse DFT of each column in `evaluations`.
     ///
     /// #### Mathematical Description
     ///
-    /// Let `H` denote the unique multiplicative subgroup of order `mat.height()`.
-    /// Treating each column of `mat` as the evaluations of a polynomial on `H`,
+    /// Let `H` denote the unique multiplicative subgroup of order `evaluations.height()`.
+    /// Treating each column of `evaluations` as the evaluations of a polynomial on `H`,
     /// compute the coefficients of those polynomials.
-    fn idft_batch(&self, mat: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
-        let mut dft = self.dft_batch(mat).to_row_major_matrix();
-        let h = dft.height();
+    fn idft_batch(&self, evaluations: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
+        let mut coefficients = self.dft_batch(evaluations.into()).to_row_major_matrix();
+        let h = coefficients.height();
 
-        divide_by_height(&mut dft);
+        divide_by_height(&mut coefficients);
 
         for row in 1..h / 2 {
-            swap_rows(&mut dft, row, h - row);
+            swap_rows(&mut coefficients, row, h - row);
         }
 
-        dft
+        coefficients
     }
 
     /// Compute the "coset iDFT" of `vec`. This is the inverse operation of "coset DFT".
@@ -133,23 +147,23 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
             .values
     }
 
-    /// Compute the "coset iDFT" of each column in `mat`. This is the inverse operation
+    /// Compute the "coset iDFT" of each column in `evaluations`. This is the inverse operation
     /// of "coset DFT".
     ///
     /// #### Mathematical Description
     ///
-    /// Let `H` denote the unique multiplicative subgroup of order `mat.height()`.
-    /// Treating each column of `mat` as the evaluations of a polynomial on `shift * H`,
+    /// Let `H` denote the unique multiplicative subgroup of order `evaluations.height()`.
+    /// Treating each column of `evaluations` as the evaluations of a polynomial on `shift * H`,
     /// compute the coefficients of those polynomials.
-    fn coset_idft_batch(&self, mut mat: RowMajorMatrix<F>, shift: F) -> RowMajorMatrix<F> {
+    fn coset_idft_batch(&self, evaluations: RowMajorMatrix<F>, shift: F) -> RowMajorMatrix<F> {
         // Let `f(x)` denote the polynomial we want. Then, if we reinterpret the columns
         // as being over the subgroup `H`, this is equivalent to switching our polynomial
         // to `g(x) = f(sx)`.
         // The output of the iDFT is the coefficients of `g` so to get the coefficients of
         // `f` we need to scale the `i`'th coefficient by `s^{-i}`.
-        mat = self.idft_batch(mat);
-        coset_shift_cols(&mut mat, shift.inverse());
-        mat
+        let mut coefficients = self.idft_batch(evaluations);
+        coset_shift_cols(&mut coefficients, shift.inverse());
+        coefficients
     }
 
     /// Compute the low-degree extension of `vec` onto a larger subgroup.
@@ -171,24 +185,24 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
             .values
     }
 
-    /// Compute the low-degree extension of each column in `mat` onto a larger subgroup.
+    /// Compute the low-degree extension of each column in `evaluations` onto a larger subgroup.
     ///
     /// #### Mathematical Description
     ///
-    /// Let `H, K` denote the unique multiplicative subgroups of order `mat.height()`
-    /// and `mat.height() << added_bits`, respectively.
-    /// Treating each column of `mat` as the evaluations of a polynomial on the subgroup `H`,
+    /// Let `H, K` denote the unique multiplicative subgroups of order `evaluations.height()`
+    /// and `evaluations.height() << added_bits`, respectively.
+    /// Treating each column of `evaluations` as the evaluations of a polynomial on the subgroup `H`,
     /// compute the evaluations of those polynomials on the subgroup `K`.
     ///
     /// There is another way to interpret this transformation which gives a larger
-    /// use case. We can also view it as treating columns of `mat` as evaluations
+    /// use case. We can also view it as treating columns of `evaluations` as evaluations
     /// over a coset `gH` and then computing the evaluations of those polynomials
     /// on the coset `gK`.
-    fn lde_batch(&self, mat: RowMajorMatrix<F>, added_bits: usize) -> Self::Evaluations {
+    fn lde_batch(&self, evaluations: RowMajorMatrix<F>, added_bits: usize) -> Self::Evaluations {
         // This is a better default as several implementations have a custom implementation
         // of `coset_lde_batch` and often the fact that the shift is `ONE` won't give any
         // performance improvements anyway.
-        self.coset_lde_batch(mat, added_bits, F::ONE)
+        self.coset_lde_batch(evaluations, added_bits, F::ONE)
     }
 
     /// Compute the low-degree extension of of `vec` onto a coset of a larger subgroup.
@@ -210,22 +224,22 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
             .values
     }
 
-    /// Compute the low-degree extension of each column in `mat` onto a coset of a larger subgroup.
+    /// Compute the low-degree extension of each column in `evaluations` onto a coset of a larger subgroup.
     ///
     /// #### Mathematical Description
     ///
-    /// Let `H, K` denote the unique multiplicative subgroups of order `mat.height()`
-    /// and `mat.height() << added_bits`, respectively.
-    /// Treating each column of `mat` as the evaluations of a polynomial on the subgroup `H`,
+    /// Let `H, K` denote the unique multiplicative subgroups of order `evaluations.height()`
+    /// and `evaluations.height() << added_bits`, respectively.
+    /// Treating each column of `evaluations` as the evaluations of a polynomial on the subgroup `H`,
     /// compute the evaluations of those polynomials on the coset `shift * K`.
     ///
     /// There is another way to interpret this transformation which gives a larger
-    /// use case. We can also view it as treating columns of `mat` as evaluations
+    /// use case. We can also view it as treating columns of `evaluations` as evaluations
     /// over a coset `gH` and then computing the evaluations of those polynomials
     /// on the coset `g'K` where `g' = g * shift`.
     fn coset_lde_batch(
         &self,
-        mat: RowMajorMatrix<F>,
+        evaluations: RowMajorMatrix<F>,
         added_bits: usize,
         shift: F,
     ) -> Self::Evaluations {
@@ -235,17 +249,17 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         // `f1`. Next, when we scale by shift, we are effectively switching to the polynomial
         // `f2(x) = f1(shift * x) = f(shift * g x)`. Applying the DFT to this, we get the evaluations of `f2` over
         // `K` which is the evaluations of `f1` over `shift * K` which is the evaluations of `f` over `g * shift * K`.
-        let mut coeffs = self.idft_batch(mat);
+        let mut coefficients = self.idft_batch(evaluations);
         // PANICS: possible panic if the new resized length overflows
-        coeffs.values.resize(
-            coeffs
+        coefficients.values.resize(
+            coefficients
                 .values
                 .len()
                 .checked_shl(added_bits.try_into().unwrap())
                 .unwrap(),
             F::ZERO,
         );
-        self.coset_dft_batch(coeffs, shift)
+        self.coset_dft_batch(coefficients, shift)
     }
 
     /// Compute the discrete Fourier transform (DFT) of `vec`.
@@ -259,23 +273,23 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         self.dft_algebra_batch(RowMajorMatrix::new_col(vec)).values
     }
 
-    /// Compute the discrete Fourier transform (DFT) of each column in `mat`.
+    /// Compute the discrete Fourier transform (DFT) of each column in `coefficients`.
     ///
     /// #### Mathematical Description
     ///
-    /// Let `H` denote the unique multiplicative subgroup of order `mat.height()`.
-    /// Treating each column of `mat` as the coefficients of a polynomial, compute the
+    /// Let `H` denote the unique multiplicative subgroup of order `coefficients.height()`.
+    /// Treating each column of `coefficients` as the coefficients of a polynomial, compute the
     /// evaluations of those polynomials on the subgroup `H`.
     fn dft_algebra_batch<V: BasedVectorSpace<F> + Clone + Send + Sync>(
         &self,
-        mat: RowMajorMatrix<V>,
+        coefficients: RowMajorMatrix<V>,
     ) -> RowMajorMatrix<V> {
-        let init_width = mat.width();
-        let base_mat =
-            RowMajorMatrix::new(V::flatten_to_base(mat.values), init_width * V::DIMENSION);
-        let base_dft_output = self.dft_batch(base_mat).to_row_major_matrix();
+        let init_width = coefficients.width();
+        let base_coefficients =
+            RowMajorMatrix::new(V::flatten_to_base(coefficients.values), init_width * V::DIMENSION);
+        let base_evaluations = self.dft_batch(base_coefficients.into()).to_row_major_matrix();
         RowMajorMatrix::new(
-            V::reconstitute_from_base(base_dft_output.values),
+            V::reconstitute_from_base(base_evaluations.values),
             init_width,
         )
     }
@@ -297,24 +311,24 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
             .values
     }
 
-    /// Compute the "coset DFT" of each column in `mat`.
+    /// Compute the "coset DFT" of each column in `coefficients`.
     ///
     /// #### Mathematical Description
     ///
-    /// Let `H` denote the unique multiplicative subgroup of order `mat.height()`.
-    /// Treating each column of `mat` as the coefficients of a polynomial, compute the
+    /// Let `H` denote the unique multiplicative subgroup of order `coefficients.height()`.
+    /// Treating each column of `coefficients` as the coefficients of a polynomial, compute the
     /// evaluations of those polynomials on the coset `shift * H`.
     fn coset_dft_algebra_batch<V: BasedVectorSpace<F> + Clone + Send + Sync>(
         &self,
-        mat: RowMajorMatrix<V>,
+        coefficients: RowMajorMatrix<V>,
         shift: F,
     ) -> RowMajorMatrix<V> {
-        let init_width = mat.width();
-        let base_mat =
-            RowMajorMatrix::new(V::flatten_to_base(mat.values), init_width * V::DIMENSION);
-        let base_dft_output = self.coset_dft_batch(base_mat, shift).to_row_major_matrix();
+        let init_width = coefficients.width();
+        let base_coefficients =
+            RowMajorMatrix::new(V::flatten_to_base(coefficients.values), init_width * V::DIMENSION);
+        let base_evaluations = self.coset_dft_batch(base_coefficients, shift).to_row_major_matrix();
         RowMajorMatrix::new(
-            V::reconstitute_from_base(base_dft_output.values),
+            V::reconstitute_from_base(base_evaluations.values),
             init_width,
         )
     }
@@ -330,23 +344,23 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         self.idft_algebra_batch(RowMajorMatrix::new_col(vec)).values
     }
 
-    /// Compute the inverse DFT of each column in `mat`.
+    /// Compute the inverse DFT of each column in `evaluations`.
     ///
     /// #### Mathematical Description
     ///
-    /// Let `H` denote the unique multiplicative subgroup of order `mat.height()`.
-    /// Treating each column of `mat` as the evaluations of a polynomial on `H`,
+    /// Let `H` denote the unique multiplicative subgroup of order `evaluations.height()`.
+    /// Treating each column of `evaluations` as the evaluations of a polynomial on `H`,
     /// compute the coefficients of those polynomials.
     fn idft_algebra_batch<V: BasedVectorSpace<F> + Clone + Send + Sync>(
         &self,
-        mat: RowMajorMatrix<V>,
+        evaluations: RowMajorMatrix<V>,
     ) -> RowMajorMatrix<V> {
-        let init_width = mat.width();
-        let base_mat =
-            RowMajorMatrix::new(V::flatten_to_base(mat.values), init_width * V::DIMENSION);
-        let base_dft_output = self.idft_batch(base_mat);
+        let init_width = evaluations.width();
+        let base_evaluations =
+            RowMajorMatrix::new(V::flatten_to_base(evaluations.values), init_width * V::DIMENSION);
+        let base_coefficients = self.idft_batch(base_evaluations);
         RowMajorMatrix::new(
-            V::reconstitute_from_base(base_dft_output.values),
+            V::reconstitute_from_base(base_coefficients.values),
             init_width,
         )
     }
@@ -367,25 +381,25 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
             .values
     }
 
-    /// Compute the "coset iDFT" of each column in `mat`. This is the inverse operation
+    /// Compute the "coset iDFT" of each column in `evaluations`. This is the inverse operation
     /// of "coset DFT".
     ///
     /// #### Mathematical Description
     ///
-    /// Let `H` denote the unique multiplicative subgroup of order `mat.height()`.
-    /// Treating each column of `mat` as the evaluations of a polynomial on `shift * H`,
+    /// Let `H` denote the unique multiplicative subgroup of order `evaluations.height()`.
+    /// Treating each column of `evaluations` as the evaluations of a polynomial on `shift * H`,
     /// compute the coefficients of those polynomials.
     fn coset_idft_algebra_batch<V: BasedVectorSpace<F> + Clone + Send + Sync>(
         &self,
-        mat: RowMajorMatrix<V>,
+        evaluations: RowMajorMatrix<V>,
         shift: F,
     ) -> RowMajorMatrix<V> {
-        let init_width = mat.width();
-        let base_mat =
-            RowMajorMatrix::new(V::flatten_to_base(mat.values), init_width * V::DIMENSION);
-        let base_dft_output = self.coset_idft_batch(base_mat, shift);
+        let init_width = evaluations.width();
+        let base_evaluations =
+            RowMajorMatrix::new(V::flatten_to_base(evaluations.values), init_width * V::DIMENSION);
+        let base_coefficients = self.coset_idft_batch(base_evaluations, shift);
         RowMajorMatrix::new(
-            V::reconstitute_from_base(base_dft_output.values),
+            V::reconstitute_from_base(base_coefficients.values),
             init_width,
         )
     }
@@ -413,30 +427,30 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
             .values
     }
 
-    /// Compute the low-degree extension of each column in `mat` onto a larger subgroup.
+    /// Compute the low-degree extension of each column in `evaluations` onto a larger subgroup.
     ///
     /// #### Mathematical Description
     ///
-    /// Let `H, K` denote the unique multiplicative subgroups of order `mat.height()`
-    /// and `mat.height() << added_bits`, respectively.
-    /// Treating each column of `mat` as the evaluations of a polynomial on the subgroup `H`,
+    /// Let `H, K` denote the unique multiplicative subgroups of order `evaluations.height()`
+    /// and `evaluations.height() << added_bits`, respectively.
+    /// Treating each column of `evaluations` as the evaluations of a polynomial on the subgroup `H`,
     /// compute the evaluations of those polynomials on the subgroup `K`.
     ///
     /// There is another way to interpret this transformation which gives a larger
-    /// use case. We can also view it as treating columns of `mat` as evaluations
+    /// use case. We can also view it as treating columns of `evaluations` as evaluations
     /// over a coset `gH` and then computing the evaluations of those polynomials
     /// on the coset `gK`.
     fn lde_algebra_batch<V: BasedVectorSpace<F> + Clone + Send + Sync>(
         &self,
-        mat: RowMajorMatrix<V>,
+        evaluations: RowMajorMatrix<V>,
         added_bits: usize,
     ) -> RowMajorMatrix<V> {
-        let init_width = mat.width();
-        let base_mat =
-            RowMajorMatrix::new(V::flatten_to_base(mat.values), init_width * V::DIMENSION);
-        let base_dft_output = self.lde_batch(base_mat, added_bits).to_row_major_matrix();
+        let init_width = evaluations.width();
+        let base_evaluations =
+            RowMajorMatrix::new(V::flatten_to_base(evaluations.values), init_width * V::DIMENSION);
+        let extended_evaluations = self.lde_batch(base_evaluations, added_bits).to_row_major_matrix();
         RowMajorMatrix::new(
-            V::reconstitute_from_base(base_dft_output.values),
+            V::reconstitute_from_base(extended_evaluations.values),
             init_width,
         )
     }
@@ -465,33 +479,33 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
             .values
     }
 
-    /// Compute the low-degree extension of each column in `mat` onto a coset of a larger subgroup.
+    /// Compute the low-degree extension of each column in `evaluations` onto a coset of a larger subgroup.
     ///
     /// #### Mathematical Description
     ///
-    /// Let `H, K` denote the unique multiplicative subgroups of order `mat.height()`
-    /// and `mat.height() << added_bits`, respectively.
-    /// Treating each column of `mat` as the evaluations of a polynomial on the subgroup `H`,
+    /// Let `H, K` denote the unique multiplicative subgroups of order `evaluations.height()`
+    /// and `evaluations.height() << added_bits`, respectively.
+    /// Treating each column of `evaluations` as the evaluations of a polynomial on the subgroup `H`,
     /// compute the evaluations of those polynomials on the coset `shift * K`.
     ///
     /// There is another way to interpret this transformation which gives a larger
-    /// use case. We can also view it as treating columns of `mat` as evaluations
+    /// use case. We can also view it as treating columns of `evaluations` as evaluations
     /// over a coset `gH` and then computing the evaluations of those polynomials
     /// on the coset `g'K` where `g' = g * shift`.
     fn coset_lde_algebra_batch<V: BasedVectorSpace<F> + Clone + Send + Sync>(
         &self,
-        mat: RowMajorMatrix<V>,
+        evaluations: RowMajorMatrix<V>,
         added_bits: usize,
         shift: F,
     ) -> RowMajorMatrix<V> {
-        let init_width = mat.width();
-        let base_mat =
-            RowMajorMatrix::new(V::flatten_to_base(mat.values), init_width * V::DIMENSION);
-        let base_dft_output = self
-            .coset_lde_batch(base_mat, added_bits, shift)
+        let init_width = evaluations.width();
+        let base_evaluations =
+            RowMajorMatrix::new(V::flatten_to_base(evaluations.values), init_width * V::DIMENSION);
+        let extended_evaluations = self
+            .coset_lde_batch(base_evaluations, added_bits, shift)
             .to_row_major_matrix();
         RowMajorMatrix::new(
-            V::reconstitute_from_base(base_dft_output.values),
+            V::reconstitute_from_base(extended_evaluations.values),
             init_width,
         )
     }

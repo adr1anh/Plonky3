@@ -59,21 +59,22 @@ impl<F: TwoAdicField> Radix2Dit<F> {
 }
 
 impl<F: TwoAdicField> TwoAdicSubgroupDft<F> for Radix2Dit<F> {
+    type Coefficients = RowMajorMatrix<F>;
     type Evaluations = RowMajorMatrix<F>;
 
-    fn dft_batch(&self, mut mat: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
-        let h = mat.height();
+    fn dft_batch(&self, mut coefficients: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
+        let h = coefficients.height();
         let log_h = log2_strict_usize(h);
 
         // Compute twiddle factors, or take memoized ones if already available.
         let twiddles = self.get_or_compute_twiddles(log_h);
 
         // DIT butterfly
-        reverse_matrix_index_bits(&mut mat);
+        reverse_matrix_index_bits(&mut coefficients);
         for layer in 0..log_h {
-            dit_layer(&mut mat.as_view_mut(), layer, &twiddles);
+            dit_layer(&mut coefficients.as_view_mut(), layer, &twiddles);
         }
-        mat
+        coefficients
     }
 }
 
