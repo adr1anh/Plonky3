@@ -25,6 +25,15 @@ use crate::util::{coset_shift_cols, divide_by_height};
 /// parallel feature) different implementation may be faster. Hence depending on your use case
 /// you may want to be using `Radix2Dit, Radix2DitParallel, RecursiveDft` or `Radix2Bowers`.
 pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
+    /// The matrix type used to store polynomial coefficients.
+    ///
+    /// This type represents a matrix of field elements containing polynomial coefficients.
+    /// It must implement `BitReversibleMatrix` to allow efficient conversion between
+    /// natural and bit-reversed row orderings.
+    ///
+    /// Most implementations use `RowMajorMatrix<F>` for natural-order coefficients.
+    type Coefficients: BitReversibleMatrix<F> + 'static;
+
     /// The matrix type used to store the result of a batched DFT operation.
     ///
     /// This type represents a matrix of field elements, used to hold the evaluations
@@ -58,7 +67,11 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// Let `H` denote the unique multiplicative subgroup of order `coefficients.height()`.
     /// Treating each column of `coefficients` as the coefficients of a polynomial, compute the
     /// evaluations of those polynomials on the subgroup `H`.
-    fn dft_batch(&self, coefficients: RowMajorMatrix<F>) -> Self::Evaluations;
+    ///
+    /// The input accepts any `BitReversibleMatrix`, allowing implementations like
+    /// `Radix2DitParallel` to optimize when receiving already bit-reversed input
+    /// by using the pattern `coefficients.bit_reverse_rows().to_row_major_matrix()`.
+    fn dft_batch<M: BitReversibleMatrix<F>>(&self, coefficients: M) -> Self::Evaluations;
 
     /// Compute the "coset DFT" of `vec`.
     ///
@@ -80,12 +93,17 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// Let `H` denote the unique multiplicative subgroup of order `coefficients.height()`.
     /// Treating each column of `coefficients` as the coefficients of a polynomial, compute the
     /// evaluations of those polynomials on the coset `shift * H`.
-    fn coset_dft_batch(&self, mut coefficients: RowMajorMatrix<F>, shift: F) -> Self::Evaluations {
+    fn coset_dft_batch<M: BitReversibleMatrix<F>>(
+        &self,
+        coefficients: M,
+        shift: F,
+    ) -> Self::Evaluations {
         // Observe that
         //     y_i = \sum_j c_j (s g^i)^j
         //         = \sum_j (c_j s^j) (g^i)^j
         // which has the structure of an ordinary DFT, except each coefficient `c_j` is first replaced
         // by `c_j s^j`.
+        let mut coefficients = coefficients.to_row_major_matrix();
         coset_shift_cols(&mut coefficients, shift);
         self.dft_batch(coefficients)
     }
@@ -108,7 +126,7 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// Let `H` denote the unique multiplicative subgroup of order `evaluations.height()`.
     /// Treating each column of `evaluations` as the evaluations of a polynomial on `H`,
     /// compute the coefficients of those polynomials.
-    fn idft_batch(&self, evaluations: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
+    fn idft_batch<M: BitReversibleMatrix<F>>(&self, evaluations: M) -> RowMajorMatrix<F> {
         let mut coefficients = self.dft_batch(evaluations).to_row_major_matrix();
         let h = coefficients.height();
 
@@ -141,7 +159,11 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// Let `H` denote the unique multiplicative subgroup of order `evaluations.height()`.
     /// Treating each column of `evaluations` as the evaluations of a polynomial on `shift * H`,
     /// compute the coefficients of those polynomials.
-    fn coset_idft_batch(&self, evaluations: RowMajorMatrix<F>, shift: F) -> RowMajorMatrix<F> {
+    fn coset_idft_batch<M: BitReversibleMatrix<F>>(
+        &self,
+        evaluations: M,
+        shift: F,
+    ) -> RowMajorMatrix<F> {
         // Let `f(x)` denote the polynomial we want. Then, if we reinterpret the columns
         // as being over the subgroup `H`, this is equivalent to switching our polynomial
         // to `g(x) = f(sx)`.
@@ -184,7 +206,11 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// use case. We can also view it as treating columns of `evaluations` as evaluations
     /// over a coset `gH` and then computing the evaluations of those polynomials
     /// on the coset `gK`.
-    fn lde_batch(&self, evaluations: RowMajorMatrix<F>, added_bits: usize) -> Self::Evaluations {
+    fn lde_batch<M: BitReversibleMatrix<F>>(
+        &self,
+        evaluations: M,
+        added_bits: usize,
+    ) -> Self::Evaluations {
         // This is a better default as several implementations have a custom implementation
         // of `coset_lde_batch` and often the fact that the shift is `ONE` won't give any
         // performance improvements anyway.
@@ -223,9 +249,9 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// use case. We can also view it as treating columns of `evaluations` as evaluations
     /// over a coset `gH` and then computing the evaluations of those polynomials
     /// on the coset `g'K` where `g' = g * shift`.
-    fn coset_lde_batch(
+    fn coset_lde_batch<M: BitReversibleMatrix<F>>(
         &self,
-        evaluations: RowMajorMatrix<F>,
+        evaluations: M,
         added_bits: usize,
         shift: F,
     ) -> Self::Evaluations {

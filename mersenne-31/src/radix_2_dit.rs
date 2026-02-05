@@ -2,6 +2,7 @@ use p3_dft::TwoAdicSubgroupDft;
 use p3_field::extension::Complex;
 use p3_field::{PrimeCharacteristicRing, PrimeField64, TwoAdicField};
 use p3_matrix::Matrix;
+use p3_matrix::bitrev::BitReversibleMatrix;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixViewMut};
 use p3_matrix::util::reverse_matrix_index_bits;
 use p3_util::log2_strict_usize;
@@ -15,9 +16,11 @@ type C = Complex<F>;
 pub struct Mersenne31ComplexRadix2Dit;
 
 impl TwoAdicSubgroupDft<C> for Mersenne31ComplexRadix2Dit {
+    type Coefficients = RowMajorMatrix<C>;
     type Evaluations = RowMajorMatrix<C>;
 
-    fn dft_batch(&self, mut coefficients: RowMajorMatrix<C>) -> RowMajorMatrix<C> {
+    fn dft_batch<M: BitReversibleMatrix<C>>(&self, coefficients: M) -> RowMajorMatrix<C> {
+        let mut coefficients = coefficients.to_row_major_matrix();
         let h = coefficients.height();
         let log_h = log2_strict_usize(h);
 

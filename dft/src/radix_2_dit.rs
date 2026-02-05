@@ -3,6 +3,7 @@ use alloc::sync::Arc;
 
 use p3_field::{Field, TwoAdicField};
 use p3_matrix::Matrix;
+use p3_matrix::bitrev::BitReversibleMatrix;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixViewMut};
 use p3_matrix::util::reverse_matrix_index_bits;
 use p3_maybe_rayon::prelude::*;
@@ -59,9 +60,11 @@ impl<F: TwoAdicField> Radix2Dit<F> {
 }
 
 impl<F: TwoAdicField> TwoAdicSubgroupDft<F> for Radix2Dit<F> {
+    type Coefficients = RowMajorMatrix<F>;
     type Evaluations = RowMajorMatrix<F>;
 
-    fn dft_batch(&self, mut coefficients: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
+    fn dft_batch<M: BitReversibleMatrix<F>>(&self, coefficients: M) -> RowMajorMatrix<F> {
+        let mut coefficients = coefficients.to_row_major_matrix();
         let h = coefficients.height();
         let log_h = log2_strict_usize(h);
 

@@ -193,10 +193,11 @@ where
     Radix2DitParallel<F>:
         TwoAdicSubgroupDft<F, Evaluations = BitReversedMatrixView<RowMajorMatrix<F>>>,
 {
+    type Coefficients = RowMajorMatrix<F>;
     type Evaluations = MaybeBitreversedMatrix<F>;
 
     #[inline]
-    fn dft_batch(&self, coefficients: RowMajorMatrix<F>) -> Self::Evaluations {
+    fn dft_batch<M: BitReversibleMatrix<F>>(&self, coefficients: M) -> Self::Evaluations {
         match self {
             Self::Recursive(inner_dft) => inner_dft.dft_batch(coefficients).into(),
             Self::Parallel(inner_dft) => inner_dft.dft_batch(coefficients).into(),
@@ -205,7 +206,11 @@ where
     }
 
     #[inline]
-    fn coset_dft_batch(&self, coefficients: RowMajorMatrix<F>, shift: F) -> Self::Evaluations {
+    fn coset_dft_batch<M: BitReversibleMatrix<F>>(
+        &self,
+        coefficients: M,
+        shift: F,
+    ) -> Self::Evaluations {
         match self {
             Self::Recursive(inner_dft) => inner_dft.coset_dft_batch(coefficients, shift).into(),
             Self::Parallel(inner_dft) => inner_dft.coset_dft_batch(coefficients, shift).into(),
@@ -214,9 +219,9 @@ where
     }
 
     #[inline]
-    fn coset_lde_batch(
+    fn coset_lde_batch<M: BitReversibleMatrix<F>>(
         &self,
-        evaluations: RowMajorMatrix<F>,
+        evaluations: M,
         added_bits: usize,
         shift: F,
     ) -> Self::Evaluations {

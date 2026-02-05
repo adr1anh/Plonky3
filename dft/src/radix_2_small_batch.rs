@@ -7,6 +7,7 @@ use core::iter;
 use itertools::Itertools;
 use p3_field::{Field, TwoAdicField, scale_slice_in_place_single_core};
 use p3_matrix::Matrix;
+use p3_matrix::bitrev::BitReversibleMatrix;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixViewMut};
 use p3_matrix::util::reverse_matrix_index_bits;
 use p3_maybe_rayon::prelude::*;
@@ -125,9 +126,11 @@ impl<F> TwoAdicSubgroupDft<F> for Radix2DFTSmallBatch<F>
 where
     F: TwoAdicField,
 {
+    type Coefficients = RowMajorMatrix<F>;
     type Evaluations = RowMajorMatrix<F>;
 
-    fn dft_batch(&self, mut coefficients: RowMajorMatrix<F>) -> Self::Evaluations {
+    fn dft_batch<M: BitReversibleMatrix<F>>(&self, coefficients: M) -> Self::Evaluations {
+        let mut coefficients = coefficients.to_row_major_matrix();
         let h = coefficients.height();
         let w = coefficients.width();
         let log_h = log2_strict_usize(h);
@@ -189,7 +192,8 @@ where
         coefficients
     }
 
-    fn idft_batch(&self, mut evaluations: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
+    fn idft_batch<M: BitReversibleMatrix<F>>(&self, evaluations: M) -> RowMajorMatrix<F> {
+        let mut evaluations = evaluations.to_row_major_matrix();
         let h = evaluations.height();
         let w = evaluations.width();
         let log_h = log2_strict_usize(h);
@@ -259,12 +263,13 @@ where
         evaluations
     }
 
-    fn coset_lde_batch(
+    fn coset_lde_batch<M: BitReversibleMatrix<F>>(
         &self,
-        mut evaluations: RowMajorMatrix<F>,
+        evaluations: M,
         added_bits: usize,
         shift: F,
     ) -> Self::Evaluations {
+        let mut evaluations = evaluations.to_row_major_matrix();
         let h = evaluations.height();
         let w = evaluations.width();
         let log_h = log2_strict_usize(h);

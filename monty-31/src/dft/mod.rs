@@ -177,13 +177,18 @@ impl<MP: FieldParameters + TwoAdicData> RecursiveDft<MontyField31<MP>> {
 impl<MP: MontyParameters + FieldParameters + TwoAdicData> TwoAdicSubgroupDft<MontyField31<MP>>
     for RecursiveDft<MontyField31<MP>>
 {
+    type Coefficients = RowMajorMatrix<MontyField31<MP>>;
     type Evaluations = BitReversedMatrixView<RowMajorMatrix<MontyField31<MP>>>;
 
     #[instrument(skip_all, fields(dims = %coefficients.dimensions(), added_bits))]
-    fn dft_batch(&self, mut coefficients: RowMajorMatrix<MontyField31<MP>>) -> Self::Evaluations
+    fn dft_batch<M: BitReversibleMatrix<MontyField31<MP>>>(
+        &self,
+        coefficients: M,
+    ) -> Self::Evaluations
     where
         MP: MontyParameters + FieldParameters + TwoAdicData,
     {
+        let mut coefficients = coefficients.to_row_major_matrix();
         let nrows = coefficients.height();
         let ncols = coefficients.width();
 
@@ -214,13 +219,14 @@ impl<MP: MontyParameters + FieldParameters + TwoAdicData> TwoAdicSubgroupDft<Mon
     }
 
     #[instrument(skip_all, fields(dims = %evaluations.dimensions(), added_bits))]
-    fn idft_batch(
+    fn idft_batch<M: BitReversibleMatrix<MontyField31<MP>>>(
         &self,
-        evaluations: RowMajorMatrix<MontyField31<MP>>,
+        evaluations: M,
     ) -> RowMajorMatrix<MontyField31<MP>>
     where
         MP: MontyParameters + FieldParameters + TwoAdicData,
     {
+        let evaluations = evaluations.to_row_major_matrix();
         let nrows = evaluations.height();
         let ncols = evaluations.width();
         if nrows <= 1 {
@@ -256,12 +262,13 @@ impl<MP: MontyParameters + FieldParameters + TwoAdicData> TwoAdicSubgroupDft<Mon
     }
 
     #[instrument(skip_all, level = "debug", fields(dims = %evaluations.dimensions(), added_bits))]
-    fn coset_lde_batch(
+    fn coset_lde_batch<M: BitReversibleMatrix<MontyField31<MP>>>(
         &self,
-        evaluations: RowMajorMatrix<MontyField31<MP>>,
+        evaluations: M,
         added_bits: usize,
         shift: MontyField31<MP>,
     ) -> Self::Evaluations {
+        let evaluations = evaluations.to_row_major_matrix();
         let nrows = evaluations.height();
         let ncols = evaluations.width();
         let result_nrows = nrows << added_bits;

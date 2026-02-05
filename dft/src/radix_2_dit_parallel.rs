@@ -143,13 +143,14 @@ where
 }
 
 impl<F: TwoAdicField + Ord> TwoAdicSubgroupDft<F> for Radix2DitParallel<F> {
+    type Coefficients = RowMajorMatrix<F>;
     type Evaluations = BitReversedMatrixView<RowMajorMatrix<F>>;
 
-    fn dft_batch(&self, coefficients: RowMajorMatrix<F>) -> Self::Evaluations {
+    fn dft_batch<M: BitReversibleMatrix<F>>(&self, coefficients: M) -> Self::Evaluations {
         // Convert coefficients to bit-reversed order for the first half of the algorithm.
-        // If a caller passes a BitReversedMatrixView that has been converted to RowMajorMatrix,
-        // this operation will have already happened. In the future, we could accept
-        // BitReversedMatrixView directly to skip this step entirely.
+        // Using bit_reverse_rows().to_row_major_matrix() is efficient:
+        // - For RowMajorMatrix: wraps in view, then materializes with bit reversal
+        // - For BitReversedMatrixView: unwraps to inner matrix (no bit reversal needed)
         let mut mat = coefficients.bit_reverse_rows().to_row_major_matrix();
 
         let h = mat.height();
@@ -171,12 +172,13 @@ impl<F: TwoAdicField + Ord> TwoAdicSubgroupDft<F> for Radix2DitParallel<F> {
     }
 
     #[instrument(skip_all, level = "debug", fields(dims = %evaluations.dimensions(), added_bits = added_bits))]
-    fn coset_lde_batch(
+    fn coset_lde_batch<M: BitReversibleMatrix<F>>(
         &self,
-        mut evaluations: RowMajorMatrix<F>,
+        evaluations: M,
         added_bits: usize,
         shift: F,
     ) -> Self::Evaluations {
+        let mut evaluations = evaluations.to_row_major_matrix();
         let w = evaluations.width;
         let h = evaluations.height();
         let log_h = log2_strict_usize(h);

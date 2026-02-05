@@ -2,6 +2,7 @@ use alloc::vec;
 
 use p3_field::TwoAdicField;
 use p3_matrix::Matrix;
+use p3_matrix::bitrev::BitReversibleMatrix;
 use p3_matrix::dense::RowMajorMatrix;
 use p3_util::log2_strict_usize;
 
@@ -11,9 +12,11 @@ use crate::TwoAdicSubgroupDft;
 pub struct NaiveDft;
 
 impl<F: TwoAdicField> TwoAdicSubgroupDft<F> for NaiveDft {
+    type Coefficients = RowMajorMatrix<F>;
     type Evaluations = RowMajorMatrix<F>;
 
-    fn dft_batch(&self, coefficients: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
+    fn dft_batch<M: BitReversibleMatrix<F>>(&self, coefficients: M) -> RowMajorMatrix<F> {
+        let coefficients = coefficients.to_row_major_matrix();
         let w = coefficients.width();
         let h = coefficients.height();
         let log_h = log2_strict_usize(h);

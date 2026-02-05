@@ -2,6 +2,7 @@ use alloc::vec::Vec;
 
 use p3_field::{Field, PrimeCharacteristicRing, TwoAdicField};
 use p3_matrix::Matrix;
+use p3_matrix::bitrev::BitReversibleMatrix;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixViewMut};
 use p3_matrix::util::reverse_matrix_index_bits;
 use p3_maybe_rayon::prelude::*;
@@ -18,27 +19,31 @@ use crate::util::divide_by_height;
 pub struct Radix2Bowers;
 
 impl<F: TwoAdicField> TwoAdicSubgroupDft<F> for Radix2Bowers {
+    type Coefficients = RowMajorMatrix<F>;
     type Evaluations = RowMajorMatrix<F>;
 
-    fn dft_batch(&self, mut coefficients: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
+    fn dft_batch<M: BitReversibleMatrix<F>>(&self, coefficients: M) -> RowMajorMatrix<F> {
+        let mut coefficients = coefficients.to_row_major_matrix();
         reverse_matrix_index_bits(&mut coefficients);
         bowers_g(&mut coefficients.as_view_mut());
         coefficients
     }
 
     /// Compute the inverse DFT of each column in `evaluations`.
-    fn idft_batch(&self, mut evaluations: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
+    fn idft_batch<M: BitReversibleMatrix<F>>(&self, evaluations: M) -> RowMajorMatrix<F> {
+        let mut evaluations = evaluations.to_row_major_matrix();
         bowers_g_t(&mut evaluations.as_view_mut());
         divide_by_height(&mut evaluations);
         reverse_matrix_index_bits(&mut evaluations);
         evaluations
     }
 
-    fn lde_batch(
+    fn lde_batch<M: BitReversibleMatrix<F>>(
         &self,
-        mut evaluations: RowMajorMatrix<F>,
+        evaluations: M,
         added_bits: usize,
     ) -> RowMajorMatrix<F> {
+        let mut evaluations = evaluations.to_row_major_matrix();
         bowers_g_t(&mut evaluations.as_view_mut());
         divide_by_height(&mut evaluations);
         evaluations = evaluations.bit_reversed_zero_pad(added_bits);
@@ -47,12 +52,13 @@ impl<F: TwoAdicField> TwoAdicSubgroupDft<F> for Radix2Bowers {
     }
 
     #[instrument(skip_all, level = "debug", fields(dims = %evaluations.dimensions(), added_bits))]
-    fn coset_lde_batch(
+    fn coset_lde_batch<M: BitReversibleMatrix<F>>(
         &self,
-        mut evaluations: RowMajorMatrix<F>,
+        evaluations: M,
         added_bits: usize,
         shift: F,
     ) -> RowMajorMatrix<F> {
+        let mut evaluations = evaluations.to_row_major_matrix();
         let h = evaluations.height();
         let log_h = log2_strict_usize(h);
         // It's cheaper to use div_2exp_u64 as this usually avoids an inversion.
