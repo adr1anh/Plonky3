@@ -115,8 +115,8 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// Let `H` denote the unique multiplicative subgroup of order `vec.len()`.
     /// Treating `vec` as the evaluations of a polynomial on `H`, compute the
     /// coefficients of that polynomial.
-    fn idft(&self, vec: Vec<F>) -> Vec<F> {
-        self.idft_batch(RowMajorMatrix::new_col(vec)).values
+    fn idft(&self, evaluations: Vec<F>) -> Vec<F> {
+        self.idft_batch(RowMajorMatrix::new_col(evaluations)).values
     }
 
     /// Compute the inverse DFT of each column in `evaluations`.
@@ -146,8 +146,8 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// Let `H` denote the unique multiplicative subgroup of order `vec.len()`.
     /// Treating `vec` as the evaluations of a polynomial on `shift * H`,
     /// compute the coefficients of this polynomial.
-    fn coset_idft(&self, vec: Vec<F>, shift: F) -> Vec<F> {
-        self.coset_idft_batch(RowMajorMatrix::new_col(vec), shift)
+    fn coset_idft(&self, evaluations: Vec<F>, shift: F) -> Vec<F> {
+        self.coset_idft_batch(RowMajorMatrix::new_col(evaluations), shift)
             .values
     }
 
