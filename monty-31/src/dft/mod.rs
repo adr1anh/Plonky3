@@ -177,7 +177,6 @@ impl<MP: FieldParameters + TwoAdicData> RecursiveDft<MontyField31<MP>> {
 impl<MP: MontyParameters + FieldParameters + TwoAdicData> TwoAdicSubgroupDft<MontyField31<MP>>
     for RecursiveDft<MontyField31<MP>>
 {
-    type Coefficients = RowMajorMatrix<MontyField31<MP>>;
     type Evaluations = BitReversedMatrixView<RowMajorMatrix<MontyField31<MP>>>;
 
     #[instrument(skip_all, fields(dims = %coefficients.dimensions(), added_bits))]
@@ -215,7 +214,10 @@ impl<MP: MontyParameters + FieldParameters + TwoAdicData> TwoAdicSubgroupDft<Mon
     }
 
     #[instrument(skip_all, fields(dims = %evaluations.dimensions(), added_bits))]
-    fn idft_batch(&self, evaluations: RowMajorMatrix<MontyField31<MP>>) -> RowMajorMatrix<MontyField31<MP>>
+    fn idft_batch(
+        &self,
+        evaluations: RowMajorMatrix<MontyField31<MP>>,
+    ) -> RowMajorMatrix<MontyField31<MP>>
     where
         MP: MontyParameters + FieldParameters + TwoAdicData,
     {
@@ -228,8 +230,8 @@ impl<MP: MontyParameters + FieldParameters + TwoAdicData> TwoAdicSubgroupDft<Mon
         let mut scratch = debug_span!("allocate scratch space")
             .in_scope(|| RowMajorMatrix::default(nrows, ncols));
 
-        let mut coefficients =
-            debug_span!("initial bitrev").in_scope(|| evaluations.bit_reverse_rows().to_row_major_matrix());
+        let mut coefficients = debug_span!("initial bitrev")
+            .in_scope(|| evaluations.bit_reverse_rows().to_row_major_matrix());
 
         self.update_twiddles(nrows);
         let inv_twiddles = self.get_inv_twiddles();

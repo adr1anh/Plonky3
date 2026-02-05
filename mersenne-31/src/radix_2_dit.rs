@@ -15,7 +15,6 @@ type C = Complex<F>;
 pub struct Mersenne31ComplexRadix2Dit;
 
 impl TwoAdicSubgroupDft<C> for Mersenne31ComplexRadix2Dit {
-    type Coefficients = RowMajorMatrix<C>;
     type Evaluations = RowMajorMatrix<C>;
 
     fn dft_batch(&self, mut coefficients: RowMajorMatrix<C>) -> RowMajorMatrix<C> {

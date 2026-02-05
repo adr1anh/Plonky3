@@ -11,7 +11,6 @@ use crate::TwoAdicSubgroupDft;
 pub struct NaiveDft;
 
 impl<F: TwoAdicField> TwoAdicSubgroupDft<F> for NaiveDft {
-    type Coefficients = RowMajorMatrix<F>;
     type Evaluations = RowMajorMatrix<F>;
 
     fn dft_batch(&self, coefficients: RowMajorMatrix<F>) -> RowMajorMatrix<F> {

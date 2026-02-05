@@ -143,7 +143,6 @@ where
 }
 
 impl<F: TwoAdicField + Ord> TwoAdicSubgroupDft<F> for Radix2DitParallel<F> {
-    type Coefficients = RowMajorMatrix<F>;
     type Evaluations = BitReversedMatrixView<RowMajorMatrix<F>>;
 
     fn dft_batch(&self, coefficients: RowMajorMatrix<F>) -> Self::Evaluations {
@@ -196,7 +195,12 @@ impl<F: TwoAdicField + Ord> TwoAdicSubgroupDft<F> for Radix2DitParallel<F> {
         // invert in F::PrimeSubfield.
         let h_inv_subfield = F::PrimeSubfield::from_int(h).try_inverse();
         let scale = h_inv_subfield.map(F::from_prime_subfield);
-        second_half(&mut evaluations, mid, &inverse_twiddles.bitrev_twiddles, scale);
+        second_half(
+            &mut evaluations,
+            mid,
+            &inverse_twiddles.bitrev_twiddles,
+            scale,
+        );
         // We skip the final bit-reversal, since the next FFT expects bit-reversed input.
 
         let lde_elems = w * (h << added_bits);

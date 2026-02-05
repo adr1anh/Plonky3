@@ -182,7 +182,7 @@ impl Mersenne31Dft {
     /// the extension field, not the domain field.
     pub fn dft_batch<Dft: TwoAdicSubgroupDft<C>>(mat: &RowMajorMatrix<F>) -> RowMajorMatrix<C> {
         let dft = Dft::default();
-        dft_postprocess(&dft.dft_batch(dft_preprocess(mat).into()).to_row_major_matrix())
+        dft_postprocess(&dft.dft_batch(dft_preprocess(mat)).to_row_major_matrix())
     }
 
     /// Compute the inverse DFT of each column of `mat`.

@@ -218,7 +218,7 @@ where
                 let random_eval = self
                     .inner
                     .dft
-                    .dft_batch(DenseMatrix::new(vanishing_poly_coeffs, w).into())
+                    .dft_batch(DenseMatrix::new(vanishing_poly_coeffs, w))
                     .to_row_major_matrix();
 
                 // Add the quotient chunk evaluations over the LDE to the evaluations of `v_H(X) * r(X)`.

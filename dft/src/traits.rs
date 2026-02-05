@@ -25,20 +25,6 @@ use crate::util::{coset_shift_cols, divide_by_height};
 /// parallel feature) different implementation may be faster. Hence depending on your use case
 /// you may want to be using `Radix2Dit, Radix2DitParallel, RecursiveDft` or `Radix2Bowers`.
 pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
-    /// The matrix type used to store the input coefficients for a batched DFT operation.
-    ///
-    /// This type represents a matrix of field elements containing polynomial coefficients.
-    /// It must implement `BitReversibleMatrix` to allow efficient conversion between
-    /// natural and bit-reversed row orderings.
-    ///
-    /// Most implementations use `RowMajorMatrix<F>` for natural-order input, but some
-    /// algorithms (like `Radix2DitParallel`) can accept `BitReversedMatrixView<RowMajorMatrix<F>>`
-    /// to skip an initial bit-reversal step when the input is already in bit-reversed order.
-    ///
-    /// The `From<RowMajorMatrix<F>>` bound ensures that default implementations can
-    /// create coefficients from a `RowMajorMatrix`.
-    type Coefficients: BitReversibleMatrix<F> + From<RowMajorMatrix<F>> + 'static;
-
     /// The matrix type used to store the result of a batched DFT operation.
     ///
     /// This type represents a matrix of field elements, used to hold the evaluations
@@ -58,7 +44,7 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// Treating `coefficients` as coefficients of a polynomial, compute the evaluations
     /// of that polynomial on the subgroup `H`.
     fn dft(&self, coefficients: Vec<F>) -> Vec<F> {
-        self.dft_batch(RowMajorMatrix::new_col(coefficients).into())
+        self.dft_batch(RowMajorMatrix::new_col(coefficients))
             .to_row_major_matrix()
             .values
     }
@@ -72,7 +58,7 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// Let `H` denote the unique multiplicative subgroup of order `coefficients.height()`.
     /// Treating each column of `coefficients` as the coefficients of a polynomial, compute the
     /// evaluations of those polynomials on the subgroup `H`.
-    fn dft_batch(&self, coefficients: Self::Coefficients) -> Self::Evaluations;
+    fn dft_batch(&self, coefficients: RowMajorMatrix<F>) -> Self::Evaluations;
 
     /// Compute the "coset DFT" of `vec`.
     ///
@@ -101,7 +87,7 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         // which has the structure of an ordinary DFT, except each coefficient `c_j` is first replaced
         // by `c_j s^j`.
         coset_shift_cols(&mut coefficients, shift);
-        self.dft_batch(coefficients.into())
+        self.dft_batch(coefficients)
     }
 
     /// Compute the inverse DFT of `vec`.
@@ -123,7 +109,7 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// Treating each column of `evaluations` as the evaluations of a polynomial on `H`,
     /// compute the coefficients of those polynomials.
     fn idft_batch(&self, evaluations: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
-        let mut coefficients = self.dft_batch(evaluations.into()).to_row_major_matrix();
+        let mut coefficients = self.dft_batch(evaluations).to_row_major_matrix();
         let h = coefficients.height();
 
         divide_by_height(&mut coefficients);
@@ -285,9 +271,11 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         coefficients: RowMajorMatrix<V>,
     ) -> RowMajorMatrix<V> {
         let init_width = coefficients.width();
-        let base_coefficients =
-            RowMajorMatrix::new(V::flatten_to_base(coefficients.values), init_width * V::DIMENSION);
-        let base_evaluations = self.dft_batch(base_coefficients.into()).to_row_major_matrix();
+        let base_coefficients = RowMajorMatrix::new(
+            V::flatten_to_base(coefficients.values),
+            init_width * V::DIMENSION,
+        );
+        let base_evaluations = self.dft_batch(base_coefficients).to_row_major_matrix();
         RowMajorMatrix::new(
             V::reconstitute_from_base(base_evaluations.values),
             init_width,
@@ -324,9 +312,13 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         shift: F,
     ) -> RowMajorMatrix<V> {
         let init_width = coefficients.width();
-        let base_coefficients =
-            RowMajorMatrix::new(V::flatten_to_base(coefficients.values), init_width * V::DIMENSION);
-        let base_evaluations = self.coset_dft_batch(base_coefficients, shift).to_row_major_matrix();
+        let base_coefficients = RowMajorMatrix::new(
+            V::flatten_to_base(coefficients.values),
+            init_width * V::DIMENSION,
+        );
+        let base_evaluations = self
+            .coset_dft_batch(base_coefficients, shift)
+            .to_row_major_matrix();
         RowMajorMatrix::new(
             V::reconstitute_from_base(base_evaluations.values),
             init_width,
@@ -356,8 +348,10 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         evaluations: RowMajorMatrix<V>,
     ) -> RowMajorMatrix<V> {
         let init_width = evaluations.width();
-        let base_evaluations =
-            RowMajorMatrix::new(V::flatten_to_base(evaluations.values), init_width * V::DIMENSION);
+        let base_evaluations = RowMajorMatrix::new(
+            V::flatten_to_base(evaluations.values),
+            init_width * V::DIMENSION,
+        );
         let base_coefficients = self.idft_batch(base_evaluations);
         RowMajorMatrix::new(
             V::reconstitute_from_base(base_coefficients.values),
@@ -395,8 +389,10 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         shift: F,
     ) -> RowMajorMatrix<V> {
         let init_width = evaluations.width();
-        let base_evaluations =
-            RowMajorMatrix::new(V::flatten_to_base(evaluations.values), init_width * V::DIMENSION);
+        let base_evaluations = RowMajorMatrix::new(
+            V::flatten_to_base(evaluations.values),
+            init_width * V::DIMENSION,
+        );
         let base_coefficients = self.coset_idft_batch(base_evaluations, shift);
         RowMajorMatrix::new(
             V::reconstitute_from_base(base_coefficients.values),
@@ -446,9 +442,13 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         added_bits: usize,
     ) -> RowMajorMatrix<V> {
         let init_width = evaluations.width();
-        let base_evaluations =
-            RowMajorMatrix::new(V::flatten_to_base(evaluations.values), init_width * V::DIMENSION);
-        let extended_evaluations = self.lde_batch(base_evaluations, added_bits).to_row_major_matrix();
+        let base_evaluations = RowMajorMatrix::new(
+            V::flatten_to_base(evaluations.values),
+            init_width * V::DIMENSION,
+        );
+        let extended_evaluations = self
+            .lde_batch(base_evaluations, added_bits)
+            .to_row_major_matrix();
         RowMajorMatrix::new(
             V::reconstitute_from_base(extended_evaluations.values),
             init_width,
@@ -499,8 +499,10 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         shift: F,
     ) -> RowMajorMatrix<V> {
         let init_width = evaluations.width();
-        let base_evaluations =
-            RowMajorMatrix::new(V::flatten_to_base(evaluations.values), init_width * V::DIMENSION);
+        let base_evaluations = RowMajorMatrix::new(
+            V::flatten_to_base(evaluations.values),
+            init_width * V::DIMENSION,
+        );
         let extended_evaluations = self
             .coset_lde_batch(base_evaluations, added_bits, shift)
             .to_row_major_matrix();

@@ -125,7 +125,6 @@ impl<F> TwoAdicSubgroupDft<F> for Radix2DFTSmallBatch<F>
 where
     F: TwoAdicField,
 {
-    type Coefficients = RowMajorMatrix<F>;
     type Evaluations = RowMajorMatrix<F>;
 
     fn dft_batch(&self, mut coefficients: RowMajorMatrix<F>) -> Self::Evaluations {
@@ -158,7 +157,13 @@ where
             .map(|slice| unsafe { as_base_slice::<DitButterfly<F>, F>(slice) }) // Safe as DitButterfly is #[repr(transparent)]
             .tuples()
         {
-            dft_layer_par_triple(&mut coefficients.as_view_mut(), dit_0, dit_1, dit_2, multi_layer_dit);
+            dft_layer_par_triple(
+                &mut coefficients.as_view_mut(),
+                dit_0,
+                dit_1,
+                dit_2,
+                multi_layer_dit,
+            );
         }
 
         // If the total number of layers is not a multiple of `LAYERS_PER_GROUP`,
@@ -173,7 +178,11 @@ where
         // Once the blocks are small enough, we can split the matrix
         // into chunks of size `chunk_size` and process them in parallel.
         // This avoids passing data between threads, which can be expensive.
-        par_remaining_layers(&mut coefficients.values, chunk_size, &root_table[..log_num_par_rows]);
+        par_remaining_layers(
+            &mut coefficients.values,
+            chunk_size,
+            &root_table[..log_num_par_rows],
+        );
 
         // Finally we bit-reverse the matrix to ensure the output is in the correct order.
         reverse_matrix_index_bits(&mut coefficients);
@@ -238,7 +247,13 @@ where
             .map(|slice| unsafe { as_base_slice::<DifButterfly<F>, F>(slice) }) // Safe as DifButterfly is #[repr(transparent)]
             .tuples()
         {
-            dft_layer_par_triple(&mut evaluations.as_view_mut(), dif_2, dif_1, dif_0, multi_layer_dif);
+            dft_layer_par_triple(
+                &mut evaluations.as_view_mut(),
+                dif_2,
+                dif_1,
+                dif_0,
+                multi_layer_dif,
+            );
         }
 
         evaluations
@@ -302,7 +317,13 @@ where
             .map(|slice| unsafe { as_base_slice::<DitButterfly<F>, F>(slice) }) // Safe as DitButterfly is #[repr(transparent)]
             .tuples()
         {
-            dft_layer_par_triple(&mut evaluations.as_view_mut(), dit_0, dit_1, dit_2, multi_layer_dit);
+            dft_layer_par_triple(
+                &mut evaluations.as_view_mut(),
+                dit_0,
+                dit_1,
+                dit_2,
+                multi_layer_dit,
+            );
         }
 
         // If the total number of layers is not a multiple of `LAYERS_PER_GROUP`,
