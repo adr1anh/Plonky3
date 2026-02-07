@@ -35,5 +35,9 @@ parallel = ["p3-maybe-rayon/parallel"]
 name = "fft"
 harness = false
 
+[[bench]]
+name = "coset_shift"
+harness = false
+
 [lints]
 workspace = true
