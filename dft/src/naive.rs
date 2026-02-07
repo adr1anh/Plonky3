@@ -1,8 +1,10 @@
 use alloc::vec;
+use alloc::vec::Vec;
 
 use p3_field::TwoAdicField;
 use p3_matrix::Matrix;
 use p3_matrix::dense::RowMajorMatrix;
+use p3_maybe_rayon::prelude::*;
 use p3_util::log2_strict_usize;
 
 use crate::TwoAdicSubgroupDft;
@@ -18,14 +20,16 @@ impl<F: TwoAdicField> TwoAdicSubgroupDft<F> for NaiveDft {
         let log_h = log2_strict_usize(h);
         let g = F::two_adic_generator(log_h);
 
+        let points: Vec<F> = g.powers().take(h).collect();
         let mut res = RowMajorMatrix::new(vec![F::ZERO; w * h], w);
-        for (res_r, point) in g.powers().take(h).enumerate() {
+        res.par_rows_mut().enumerate().for_each(|(res_r, row)| {
+            let point = points[res_r];
             for (src_r, point_power) in point.powers().take(h).enumerate() {
                 for c in 0..w {
-                    res.values[res_r * w + c] += point_power * mat.values[src_r * w + c];
+                    row[c] += point_power * mat.values[src_r * w + c];
                 }
             }
-        }
+        });
 
         res
     }

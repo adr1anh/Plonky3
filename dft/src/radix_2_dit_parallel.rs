@@ -6,7 +6,7 @@ use core::mem::{MaybeUninit, transmute};
 
 use itertools::{Itertools, izip};
 use p3_field::integers::QuotientMap;
-use p3_field::{Field, Powers, TwoAdicField};
+use p3_field::{Field, Powers, TwoAdicField, scale_slice_in_place_single_core};
 use p3_matrix::Matrix;
 use p3_matrix::bitrev::{BitReversalPerm, BitReversedMatrixView, BitReversibleMatrix};
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView, RowMajorMatrixViewMut};
@@ -404,7 +404,7 @@ fn second_half<F: Field>(
         .for_each(|(thread, mut submat)| {
             let mut backwards = false;
             if let Some(scale) = scale {
-                submat.scale(scale);
+                scale_slice_in_place_single_core(submat.values, scale);
             }
             for layer in mid..log_h {
                 let first_block = thread << (layer - mid);

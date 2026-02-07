@@ -56,6 +56,34 @@ where
     });
 }
 
+/// Reverse the order of rows in a matrix (except row 0, which stays fixed).
+///
+/// Swaps row `i` with row `h - i` for `i` in `1..h/2`. This is the
+/// row permutation needed for computing the inverse DFT from the forward DFT.
+///
+/// The swaps are independent and are performed in parallel.
+///
+/// # Arguments
+/// - `mat`: The matrix whose rows should be reversed.
+#[instrument(level = "debug", skip_all)]
+pub fn reverse_matrix_rows<F, S>(mat: &mut DenseMatrix<F, S>)
+where
+    F: Clone + Send + Sync,
+    S: DenseStorage<F> + BorrowMut<[F]>,
+{
+    let w = mat.width();
+    let h = mat.height();
+    let values = mat.values.borrow_mut().as_mut_ptr() as usize;
+
+    // SAFETY: For i in 1..h/2, we swap rows i and h-i.
+    // Since i < h/2 < h-i, each pair is disjoint and no row
+    // is accessed by more than one thread.
+    (1..h / 2).into_par_iter().for_each(|i| {
+        let values = values as *mut F;
+        unsafe { swap_rows_raw(values, w, i, h - i) };
+    });
+}
+
 /// Swap two rows `i` and `j` in a [`RowMajorMatrix`].
 ///
 /// # Panics

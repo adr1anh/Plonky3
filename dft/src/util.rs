@@ -1,8 +1,10 @@
+use alloc::vec::Vec;
 use core::borrow::BorrowMut;
 
-use p3_field::{Field, PrimeCharacteristicRing};
+use p3_field::{Field, PrimeCharacteristicRing, scale_slice_in_place_single_core};
 use p3_matrix::Matrix;
 use p3_matrix::dense::{DenseMatrix, DenseStorage, RowMajorMatrix};
+use p3_maybe_rayon::prelude::*;
 use p3_util::log2_strict_usize;
 use tracing::instrument;
 
@@ -26,12 +28,11 @@ pub fn divide_by_height<F: Field, S: DenseStorage<F> + BorrowMut<[F]>>(
 
 /// Multiply each element of row `i` of `mat` by `shift**i`.
 pub(crate) fn coset_shift_cols<F: Field>(mat: &mut RowMajorMatrix<F>, shift: F) {
-    mat.rows_mut()
-        .zip(shift.powers())
+    let powers: Vec<F> = shift.powers().take(mat.height()).collect();
+    mat.par_rows_mut()
+        .zip(powers.into_par_iter())
         .for_each(|(row, weight)| {
-            row.iter_mut().for_each(|coeff| {
-                *coeff *= weight;
-            });
+            scale_slice_in_place_single_core(row, weight);
         });
 }
 

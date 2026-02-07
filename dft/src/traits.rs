@@ -4,7 +4,7 @@ use p3_field::{BasedVectorSpace, TwoAdicField};
 use p3_matrix::Matrix;
 use p3_matrix::bitrev::BitReversibleMatrix;
 use p3_matrix::dense::RowMajorMatrix;
-use p3_matrix::util::swap_rows;
+use p3_matrix::util::reverse_matrix_rows;
 
 use crate::util::{coset_shift_cols, divide_by_height};
 
@@ -110,13 +110,9 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// compute the coefficients of those polynomials.
     fn idft_batch(&self, mat: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
         let mut dft = self.dft_batch(mat).to_row_major_matrix();
-        let h = dft.height();
 
         divide_by_height(&mut dft);
-
-        for row in 1..h / 2 {
-            swap_rows(&mut dft, row, h - row);
-        }
+        reverse_matrix_rows(&mut dft);
 
         dft
     }

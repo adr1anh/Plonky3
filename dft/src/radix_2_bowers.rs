@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use p3_field::{Field, PrimeCharacteristicRing, TwoAdicField};
+use p3_field::{Field, PrimeCharacteristicRing, TwoAdicField, scale_slice_in_place_single_core};
 use p3_matrix::Matrix;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixViewMut};
 use p3_matrix::util::reverse_matrix_index_bits;
@@ -67,7 +67,7 @@ impl<F: TwoAdicField> TwoAdicSubgroupDft<F> for Radix2Bowers {
 
         mat.par_rows_mut()
             .zip(weights.into_par_iter())
-            .for_each(|(row, weight)| row.iter_mut().for_each(|elem| *elem *= weight));
+            .for_each(|(row, weight)| scale_slice_in_place_single_core(row, weight));
 
         mat = mat.bit_reversed_zero_pad(added_bits);
 
