@@ -165,6 +165,30 @@ impl<F: TwoAdicField + Ord> TwoAdicSubgroupDft<F> for Radix2DitParallel<F> {
         mat.bit_reverse_rows()
     }
 
+    #[instrument(skip_all, level = "debug", fields(added_bits = added_bits))]
+    fn coset_dft_batch_extended<M: BitReversibleMatrix<F>>(
+        &self,
+        coeffs: M,
+        added_bits: usize,
+        shift: F,
+    ) -> Self::Evaluations {
+        if added_bits == 0 {
+            return self.coset_dft_batch(coeffs.to_row_major_matrix(), shift);
+        }
+
+        // Convert to bit-reversed physical order for the internal coset_dft functions.
+        // This is FREE if `coeffs` is already `BitReversedMatrixView` (just unwraps
+        // the inner `RowMajorMatrix`). For `RowMajorMatrix` input, this materializes
+        // one bit-reversal pass.
+        let mut mat = coeffs.bit_reverse_rows().to_row_major_matrix();
+        let w = mat.width();
+        let h = mat.height();
+        let log_h = log2_strict_usize(h);
+
+        multi_coset_dft(self, &mut mat, w, h, log_h, added_bits, shift);
+        BitReversalPerm::new_view(mat)
+    }
+
     #[instrument(skip_all, level = "debug", fields(dims = %mat.dimensions(), added_bits = added_bits))]
     fn coset_lde_batch(
         &self,
@@ -192,39 +216,60 @@ impl<F: TwoAdicField + Ord> TwoAdicSubgroupDft<F> for Radix2DitParallel<F> {
         let scale = h_inv_subfield.map(F::from_prime_subfield);
         second_half(&mut mat, mid, &inverse_twiddles.bitrev_twiddles, scale);
         // We skip the final bit-reversal, since the next FFT expects bit-reversed input.
+        // The data is now in bit-reversed order, which is exactly what `multi_coset_dft` needs.
 
-        let lde_elems = w * (h << added_bits);
-        let elems_to_add = lde_elems - w * h;
-        debug_span!("reserve_exact").in_scope(|| mat.values.reserve_exact(elems_to_add));
-
-        let g_big = F::two_adic_generator(log_h + added_bits);
-
-        let mat_ptr = mat.values.as_mut_ptr();
-        let rest_ptr = unsafe { (mat_ptr as *mut MaybeUninit<F>).add(w * h) };
-        let first_slice: &mut [F] = unsafe { slice::from_raw_parts_mut(mat_ptr, w * h) };
-        let rest_slice: &mut [MaybeUninit<F>] =
-            unsafe { slice::from_raw_parts_mut(rest_ptr, lde_elems - w * h) };
-        let mut first_coset_mat = RowMajorMatrixViewMut::new(first_slice, w);
-        let mut rest_cosets_mat = rest_slice
-            .chunks_exact_mut(w * h)
-            .map(|slice| RowMajorMatrixViewMut::new(slice, w))
-            .collect_vec();
-
-        for coset_idx in 1..(1 << added_bits) {
-            let total_shift = g_big.exp_u64(coset_idx as u64) * shift;
-            let coset_idx = reverse_bits_len(coset_idx, added_bits);
-            let dest = &mut rest_cosets_mat[coset_idx - 1]; // - 1 because we removed the first matrix.
-            coset_dft_oop(self, &first_coset_mat.as_view(), dest, total_shift);
-        }
-
-        // Now run a forward DFT on the very first coset, this time in-place.
-        coset_dft(self, &mut first_coset_mat.as_view_mut(), shift);
-
-        // SAFETY: We wrote all values above.
-        unsafe {
-            mat.values.set_len(lde_elems);
-        }
+        multi_coset_dft(self, &mut mat, w, h, log_h, added_bits, shift);
         BitReversalPerm::new_view(mat)
+    }
+}
+
+/// Evaluate a degree-< `h` polynomial on `2^added_bits` cosets of `H` (size `h`),
+/// producing evaluations on the full domain `K` (size `h << added_bits`).
+///
+/// **Precondition**: `mat` contains `h` rows in *bit-reversed physical order*
+/// (i.e. the data layout that `coset_dft` / `coset_dft_oop` expect).
+///
+/// On return, `mat.values` has been extended to `h << added_bits` rows and
+/// `BitReversalPerm::new_view(mat)` gives the evaluations in logical order.
+fn multi_coset_dft<F: TwoAdicField + Ord>(
+    dft: &Radix2DitParallel<F>,
+    mat: &mut RowMajorMatrix<F>,
+    w: usize,
+    h: usize,
+    log_h: usize,
+    added_bits: usize,
+    shift: F,
+) {
+    let lde_elems = w * (h << added_bits);
+    let elems_to_add = lde_elems - w * h;
+    debug_span!("reserve_exact").in_scope(|| mat.values.reserve_exact(elems_to_add));
+
+    let g_big = F::two_adic_generator(log_h + added_bits);
+
+    let mat_ptr = mat.values.as_mut_ptr();
+    let rest_ptr = unsafe { (mat_ptr as *mut MaybeUninit<F>).add(w * h) };
+    let first_slice: &mut [F] = unsafe { slice::from_raw_parts_mut(mat_ptr, w * h) };
+    let rest_slice: &mut [MaybeUninit<F>] =
+        unsafe { slice::from_raw_parts_mut(rest_ptr, lde_elems - w * h) };
+    let mut first_coset_mat = RowMajorMatrixViewMut::new(first_slice, w);
+    let mut rest_cosets_mat = rest_slice
+        .chunks_exact_mut(w * h)
+        .map(|slice| RowMajorMatrixViewMut::new(slice, w))
+        .collect_vec();
+
+    for coset_idx in 1..(1 << added_bits) {
+        let total_shift = g_big.exp_u64(coset_idx as u64) * shift;
+        let coset_idx = reverse_bits_len(coset_idx, added_bits);
+        let dest = &mut rest_cosets_mat[coset_idx - 1]; // - 1 because we removed the first matrix.
+        coset_dft_oop(dft, &first_coset_mat.as_view(), dest, total_shift);
+    }
+
+    // Now run a forward DFT on the very first coset, this time in-place.
+    coset_dft(dft, &mut first_coset_mat.as_view_mut(), shift);
+
+    // SAFETY: We wrote all values above.
+    unsafe {
+        mat.values.set_len(lde_elems);
     }
 }
 

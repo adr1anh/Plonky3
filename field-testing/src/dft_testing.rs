@@ -111,6 +111,53 @@ where
     }
 }
 
+pub fn test_dft_extended_matches_naive<F, Dft>()
+where
+    F: TwoAdicField,
+    StandardUniform: Distribution<F>,
+    Dft: TwoAdicSubgroupDft<F>,
+{
+    let dft = Dft::default();
+    let mut rng = SmallRng::seed_from_u64(1);
+    for log_h in 0..5 {
+        let h = 1 << log_h;
+        for added_bits in 0..3 {
+            let mat = RowMajorMatrix::<F>::rand(&mut rng, h, 3);
+            let naive_result = NaiveDft.dft_batch_extended(mat.clone(), added_bits);
+            let dft_result = dft.dft_batch_extended(mat, added_bits);
+            assert_eq!(
+                naive_result.to_row_major_matrix(),
+                dft_result.to_row_major_matrix(),
+                "dft_batch_extended mismatch at log_h={log_h}, added_bits={added_bits}"
+            );
+        }
+    }
+}
+
+pub fn test_coset_dft_extended_matches_naive<F, Dft>()
+where
+    F: TwoAdicField,
+    StandardUniform: Distribution<F>,
+    Dft: TwoAdicSubgroupDft<F>,
+{
+    let dft = Dft::default();
+    let mut rng = SmallRng::seed_from_u64(1);
+    for log_h in 0..5 {
+        let h = 1 << log_h;
+        for added_bits in 0..3 {
+            let mat = RowMajorMatrix::<F>::rand(&mut rng, h, 3);
+            let shift = F::GENERATOR;
+            let naive_result = NaiveDft.coset_dft_batch_extended(mat.clone(), added_bits, shift);
+            let dft_result = dft.coset_dft_batch_extended(mat, added_bits, shift);
+            assert_eq!(
+                naive_result.to_row_major_matrix(),
+                dft_result.to_row_major_matrix(),
+                "coset_dft_batch_extended mismatch at log_h={log_h}, added_bits={added_bits}"
+            );
+        }
+    }
+}
+
 pub fn test_dft_idft_consistency<F, Dft>()
 where
     F: TwoAdicField,
@@ -335,6 +382,16 @@ macro_rules! test_field_dft {
             #[test]
             fn coset_lde_matches_naive() {
                 $crate::test_coset_lde_matches_naive::<$field, $dft>();
+            }
+
+            #[test]
+            fn dft_extended_matches_naive() {
+                $crate::test_dft_extended_matches_naive::<$field, $dft>();
+            }
+
+            #[test]
+            fn coset_dft_extended_matches_naive() {
+                $crate::test_coset_dft_extended_matches_naive::<$field, $dft>();
             }
 
             #[test]

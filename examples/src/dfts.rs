@@ -214,6 +214,28 @@ where
     }
 
     #[inline]
+    fn coset_dft_batch_extended<M: BitReversibleMatrix<F>>(
+        &self,
+        coeffs: M,
+        added_bits: usize,
+        shift: F,
+    ) -> Self::Evaluations {
+        // We need to materialize first since different inner DFTs accept different types.
+        let mat = coeffs.to_row_major_matrix();
+        match self {
+            Self::Recursive(inner_dft) => inner_dft
+                .coset_dft_batch_extended(mat, added_bits, shift)
+                .into(),
+            Self::Parallel(inner_dft) => inner_dft
+                .coset_dft_batch_extended(mat, added_bits, shift)
+                .into(),
+            Self::SmallBatch(inner_dft) => inner_dft
+                .coset_dft_batch_extended(mat, added_bits, shift)
+                .into(),
+        }
+    }
+
+    #[inline]
     fn coset_lde_batch(
         &self,
         mat: RowMajorMatrix<F>,

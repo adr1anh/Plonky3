@@ -1,7 +1,8 @@
 use alloc::vec::Vec;
 
-use p3_field::{Field, PrimeCharacteristicRing, TwoAdicField};
+use p3_field::{Field, Powers, PrimeCharacteristicRing, TwoAdicField};
 use p3_matrix::Matrix;
+use p3_matrix::bitrev::BitReversibleMatrix;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixViewMut};
 use p3_matrix::util::reverse_matrix_index_bits;
 use p3_maybe_rayon::prelude::*;
@@ -37,6 +38,49 @@ impl<F: TwoAdicField> TwoAdicSubgroupDft<F> for Radix2Bowers {
     fn lde_batch(&self, mut mat: RowMajorMatrix<F>, added_bits: usize) -> RowMajorMatrix<F> {
         bowers_g_t(&mut mat.as_view_mut());
         divide_by_height(&mut mat);
+        mat = mat.bit_reversed_zero_pad(added_bits);
+        bowers_g(&mut mat.as_view_mut());
+        mat
+    }
+
+    fn dft_batch_extended<M: BitReversibleMatrix<F>>(
+        &self,
+        coeffs: M,
+        added_bits: usize,
+    ) -> RowMajorMatrix<F> {
+        if added_bits == 0 {
+            return self.dft_batch(coeffs.to_row_major_matrix());
+        }
+        // Bowers G expects bit-reversed input. `bit_reverse_rows().to_row_major_matrix()`
+        // produces that layout — for free if `coeffs` is already a `BitReversedMatrixView`.
+        let mat = coeffs.bit_reverse_rows().to_row_major_matrix();
+        let mut mat = mat.bit_reversed_zero_pad(added_bits);
+        bowers_g(&mut mat.as_view_mut());
+        mat
+    }
+
+    fn coset_dft_batch_extended<M: BitReversibleMatrix<F>>(
+        &self,
+        coeffs: M,
+        added_bits: usize,
+        shift: F,
+    ) -> RowMajorMatrix<F> {
+        if added_bits == 0 {
+            return self.coset_dft_batch(coeffs.to_row_major_matrix(), shift);
+        }
+        let h = coeffs.height();
+        // Get coefficients in bit-reversed physical order.
+        let mut mat = coeffs.bit_reverse_rows().to_row_major_matrix();
+        // Scale by powers of the coset shift, in bit-reversed order (matching the data layout).
+        let mut weights = Powers {
+            base: shift,
+            current: F::ONE,
+        }
+        .collect_n(h);
+        reverse_slice_index_bits(&mut weights);
+        mat.par_rows_mut()
+            .zip(weights.into_par_iter())
+            .for_each(|(row, weight)| row.iter_mut().for_each(|elem| *elem *= weight));
         mat = mat.bit_reversed_zero_pad(added_bits);
         bowers_g(&mut mat.as_view_mut());
         mat

@@ -90,6 +90,50 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         self.dft_batch(mat)
     }
 
+    /// Evaluate degree-< N coefficient polynomials on a subgroup `K` of size `N · 2^added_bits`.
+    ///
+    /// Each column of `coeffs` holds the coefficients of a polynomial of degree `< N`
+    /// (where `N = coeffs.height()`). The output contains the evaluations of those
+    /// polynomials on `K`, the unique subgroup of order `N · 2^added_bits`.
+    ///
+    /// `coeffs` accepts any [`BitReversibleMatrix`] so that callers with bit-reversed data
+    /// (e.g. from a prior DFT) can avoid a materialized bit-reversal.
+    ///
+    /// Equivalent to zero-padding `coeffs` to `N · 2^added_bits` rows and calling
+    /// [`Self::dft_batch`], but implementations may avoid the cost of processing
+    /// the zero-padded rows.
+    fn dft_batch_extended<M: BitReversibleMatrix<F>>(
+        &self,
+        coeffs: M,
+        added_bits: usize,
+    ) -> Self::Evaluations {
+        self.coset_dft_batch_extended(coeffs, added_bits, F::ONE)
+    }
+
+    /// Evaluate degree-< N coefficient polynomials on the coset `shift · K`, where
+    /// `|K| = N · 2^added_bits`.
+    ///
+    /// Like [`Self::dft_batch_extended`], but evaluates on `shift · K` instead of `K`.
+    ///
+    /// `coeffs` accepts any [`BitReversibleMatrix`] so that callers with bit-reversed data
+    /// (e.g. from a prior DFT) can avoid a materialized bit-reversal.
+    fn coset_dft_batch_extended<M: BitReversibleMatrix<F>>(
+        &self,
+        coeffs: M,
+        added_bits: usize,
+        shift: F,
+    ) -> Self::Evaluations {
+        if added_bits == 0 {
+            return self.coset_dft_batch(coeffs.to_row_major_matrix(), shift);
+        }
+        let mut mat = coeffs.to_row_major_matrix();
+        coset_shift_cols(&mut mat, shift);
+        let w = mat.width();
+        mat.values
+            .resize(w * (mat.height() << added_bits), F::ZERO);
+        self.dft_batch(mat)
+    }
+
     /// Compute the inverse DFT of `vec`.
     ///
     /// #### Mathematical Description
@@ -235,17 +279,8 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         // `f1`. Next, when we scale by shift, we are effectively switching to the polynomial
         // `f2(x) = f1(shift * x) = f(shift * g x)`. Applying the DFT to this, we get the evaluations of `f2` over
         // `K` which is the evaluations of `f1` over `shift * K` which is the evaluations of `f` over `g * shift * K`.
-        let mut coeffs = self.idft_batch(mat);
-        // PANICS: possible panic if the new resized length overflows
-        coeffs.values.resize(
-            coeffs
-                .values
-                .len()
-                .checked_shl(added_bits.try_into().unwrap())
-                .unwrap(),
-            F::ZERO,
-        );
-        self.coset_dft_batch(coeffs, shift)
+        let coeffs = self.idft_batch(mat);
+        self.coset_dft_batch_extended(coeffs, added_bits, shift)
     }
 
     /// Compute the discrete Fourier transform (DFT) of `vec`.
@@ -313,6 +348,51 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         let base_mat =
             RowMajorMatrix::new(V::flatten_to_base(mat.values), init_width * V::DIMENSION);
         let base_dft_output = self.coset_dft_batch(base_mat, shift).to_row_major_matrix();
+        RowMajorMatrix::new(
+            V::reconstitute_from_base(base_dft_output.values),
+            init_width,
+        )
+    }
+
+    /// Evaluate degree-< N algebra-valued coefficient polynomials on a subgroup `K`
+    /// of size `N · 2^added_bits`.
+    ///
+    /// This is the algebra (extension field) variant of [`Self::dft_batch_extended`].
+    /// It decomposes algebra elements into base-field components, applies
+    /// `dft_batch_extended` to each, and reconstitutes.
+    fn dft_algebra_batch_extended<V: BasedVectorSpace<F> + Clone + Send + Sync>(
+        &self,
+        mat: RowMajorMatrix<V>,
+        added_bits: usize,
+    ) -> RowMajorMatrix<V> {
+        let init_width = mat.width();
+        let base_mat =
+            RowMajorMatrix::new(V::flatten_to_base(mat.values), init_width * V::DIMENSION);
+        let base_dft_output = self
+            .dft_batch_extended(base_mat, added_bits)
+            .to_row_major_matrix();
+        RowMajorMatrix::new(
+            V::reconstitute_from_base(base_dft_output.values),
+            init_width,
+        )
+    }
+
+    /// Evaluate degree-< N algebra-valued coefficient polynomials on the coset
+    /// `shift · K`, where `|K| = N · 2^added_bits`.
+    ///
+    /// This is the algebra (extension field) variant of [`Self::coset_dft_batch_extended`].
+    fn coset_dft_algebra_batch_extended<V: BasedVectorSpace<F> + Clone + Send + Sync>(
+        &self,
+        mat: RowMajorMatrix<V>,
+        added_bits: usize,
+        shift: F,
+    ) -> RowMajorMatrix<V> {
+        let init_width = mat.width();
+        let base_mat =
+            RowMajorMatrix::new(V::flatten_to_base(mat.values), init_width * V::DIMENSION);
+        let base_dft_output = self
+            .coset_dft_batch_extended(base_mat, added_bits, shift)
+            .to_row_major_matrix();
         RowMajorMatrix::new(
             V::reconstitute_from_base(base_dft_output.values),
             init_width,
