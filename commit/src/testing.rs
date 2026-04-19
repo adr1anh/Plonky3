@@ -49,7 +49,6 @@ where
     type Domain = TwoAdicMultiplicativeCoset<Val>;
     type Commitment = Vec<Vec<Val>>;
     type ProverData = Vec<RowMajorMatrix<Val>>;
-    type EvaluationsOnDomain<'a> = Dft::Evaluations;
     type Proof = ();
     type Error = ();
     const ZK: bool = false;
@@ -125,7 +124,7 @@ where
         prover_data: &'a Self::ProverData,
         idx: usize,
         domain: Self::Domain,
-    ) -> Self::EvaluationsOnDomain<'a> {
+    ) -> impl Matrix<Val> + 'a {
         let mut coeffs = prover_data[idx].clone();
         assert!(domain.log_size() >= self.log_n);
         coeffs.values.resize(

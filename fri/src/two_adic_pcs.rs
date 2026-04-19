@@ -30,7 +30,7 @@ use p3_field::{
     ExtensionField, PackedFieldExtension, TwoAdicField, batch_multiplicative_inverse, dot_product,
 };
 use p3_matrix::Matrix;
-use p3_matrix::bitrev::{BitReversedMatrixView, BitReversibleMatrix};
+use p3_matrix::bitrev::BitReversibleMatrix;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixCow};
 use p3_matrix::interpolation::Interpolate;
 use p3_maybe_rayon::prelude::*;
@@ -274,7 +274,6 @@ where
     type Domain = TwoAdicMultiplicativeCoset<Val>;
     type Commitment = InputMmcs::Commitment;
     type ProverData = InputMmcs::ProverData<RowMajorMatrix<Val>>;
-    type EvaluationsOnDomain<'a> = BitReversedMatrixView<RowMajorMatrixCow<'a, Val>>;
     type Proof = FriProof<Challenge, FriMmcs, Val, Vec<BatchOpening<Val, InputMmcs>>>;
     type Error = FriError<FriMmcs::Error, InputMmcs::Error>;
     const ZK: bool = false;
@@ -365,7 +364,7 @@ where
         prover_data: &'a Self::ProverData,
         idx: usize,
         domain: Self::Domain,
-    ) -> Self::EvaluationsOnDomain<'a> {
+    ) -> impl Matrix<Val> + 'a {
         let lde = self.mmcs.get_matrices(prover_data)[idx];
         if domain.shift() == Val::GENERATOR && lde.height() >= domain.size() {
             return lde.split_rows(domain.size()).0.as_cow().bit_reverse_rows();

@@ -13,8 +13,7 @@ use p3_field::extension::ComplexExtendable;
 use p3_field::{ExtensionField, Field};
 use p3_fri::FriParameters;
 use p3_fri::verifier::FriError;
-use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixCow};
-use p3_matrix::row_index_mapped::RowIndexMappedView;
+use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::{Dimensions, Matrix};
 use p3_maybe_rayon::prelude::*;
 use p3_util::log2_strict_usize;
@@ -30,7 +29,7 @@ use crate::point::Point;
 use crate::prover::prove;
 use crate::verifier::verify;
 use crate::{
-    CfftPerm, CfftPermutable, CircleEvaluations, CircleFriProof, build_periodic_lde_table_circle,
+    CfftPermutable, CircleEvaluations, CircleFriProof, build_periodic_lde_table_circle,
     cfft_permute_index,
 };
 
@@ -112,7 +111,6 @@ where
     type Domain = CircleDomain<Val>;
     type Commitment = InputMmcs::Commitment;
     type ProverData = InputMmcs::ProverData<RowMajorMatrix<Val>>;
-    type EvaluationsOnDomain<'a> = RowIndexMappedView<CfftPerm, RowMajorMatrixCow<'a, Val>>;
     type Proof = CirclePcsProof<Val, Challenge, InputMmcs, FriMmcs, Challenger::Witness>;
     type Error = FriError<FriMmcs::Error, InputError<InputMmcs::Error, FriMmcs::Error>>;
     const ZK: bool = false;
@@ -175,7 +173,7 @@ where
         data: &'a Self::ProverData,
         idx: usize,
         domain: Self::Domain,
-    ) -> Self::EvaluationsOnDomain<'a> {
+    ) -> impl Matrix<Val> + 'a {
         let mat = self.mmcs.get_matrices(data)[idx].as_view();
         let committed_domain = CircleDomain::standard(log2_strict_usize(mat.height()));
         if domain == committed_domain {

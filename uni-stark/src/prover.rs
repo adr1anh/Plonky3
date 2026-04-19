@@ -399,21 +399,22 @@ where
 #[instrument(skip_all, level = "debug")]
 // TODO: Group some arguments to remove the `allow`?
 #[allow(clippy::too_many_arguments)]
-pub fn quotient_values<SC, A, Mat>(
+pub fn quotient_values<SC, A, TraceMat, PreprocessedMat>(
     pcs: &SC::Pcs,
     air: &A,
     public_values: &[Val<SC>],
     layout: AirLayout,
     trace_domain: Domain<SC>,
     quotient_domain: Domain<SC>,
-    trace_on_quotient_domain: &Mat,
-    preprocessed_on_quotient_domain: Option<&Mat>,
+    trace_on_quotient_domain: &TraceMat,
+    preprocessed_on_quotient_domain: Option<&PreprocessedMat>,
     alpha: SC::Challenge,
 ) -> Vec<SC::Challenge>
 where
     SC: StarkGenericConfig,
     A: Air<SymbolicAirBuilder<Val<SC>>> + for<'a> Air<ProverConstraintFolder<'a, SC>>,
-    Mat: Matrix<Val<SC>> + Sync,
+    TraceMat: Matrix<Val<SC>> + Sync,
+    PreprocessedMat: Matrix<Val<SC>> + Sync,
 {
     let quotient_size = quotient_domain.size();
     let width = trace_on_quotient_domain.width();

@@ -363,7 +363,7 @@ proptest! {
 
         // Compute the coset low-degree extension with every backend.
         let naive = NaiveDft.coset_lde_batch(mat.clone(), added_bits, shift).to_row_major_matrix();
-        let dit = Radix2Dit::default().coset_lde_batch(mat.clone(), added_bits, shift);
+        let dit = Radix2Dit::default().coset_lde_batch(mat.clone(), added_bits, shift).to_row_major_matrix();
         let bowers = Radix2Bowers.coset_lde_batch(mat.clone(), added_bits, shift);
         let parallel = Radix2DitParallel::default()
             .coset_lde_batch(mat.clone(), added_bits, shift)
@@ -435,7 +435,7 @@ proptest! {
         // Forward coset DFT evaluates on shift * H.
         let forward = dft.coset_dft_batch(original.clone(), shift);
         // Inverse coset DFT recovers the coefficients.
-        let back = dft.coset_idft_batch(forward, shift);
+        let back = dft.coset_idft_batch(forward.to_row_major_matrix(), shift);
 
         prop_assert_eq!(original, back);
     }
@@ -445,7 +445,7 @@ proptest! {
         let original = rand_matrix(seed, 1 << log_h, w);
 
         let forward = Radix2Bowers.coset_dft_batch(original.clone(), shift);
-        let back = Radix2Bowers.coset_idft_batch(forward, shift);
+        let back = Radix2Bowers.coset_idft_batch(forward.to_row_major_matrix(), shift);
 
         prop_assert_eq!(original, back);
     }
@@ -617,7 +617,7 @@ fn coset_lde_with_shift_one_equals_lde() {
         // Coset LDE with trivial shift.
         let coset_lde = dft.coset_lde_batch(mat, 2, F::ONE);
 
-        assert_eq!(lde, coset_lde, "log_h={log_h}");
+        assert_eq!(lde.to_row_major_matrix(), coset_lde.to_row_major_matrix(), "log_h={log_h}");
     }
 }
 

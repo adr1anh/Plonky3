@@ -17,9 +17,8 @@ use crate::util::divide_by_height;
 #[derive(Default, Clone)]
 pub struct Radix2Bowers;
 
+#[allow(refining_impl_trait_reachable)]
 impl<F: TwoAdicField> TwoAdicSubgroupDft<F> for Radix2Bowers {
-    type Evaluations = RowMajorMatrix<F>;
-
     fn dft_batch(&self, mut mat: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
         reverse_matrix_index_bits(&mut mat);
         bowers_g(&mut mat.as_view_mut());

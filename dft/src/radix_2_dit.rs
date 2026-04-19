@@ -58,9 +58,8 @@ impl<F: TwoAdicField> Radix2Dit<F> {
     }
 }
 
+#[allow(refining_impl_trait_reachable)]
 impl<F: TwoAdicField> TwoAdicSubgroupDft<F> for Radix2Dit<F> {
-    type Evaluations = RowMajorMatrix<F>;
-
     fn dft_batch(&self, mut mat: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
         let h = mat.height();
         let log_h = log2_strict_usize(h);

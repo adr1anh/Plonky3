@@ -131,13 +131,12 @@ impl<F: TwoAdicField> Radix2DFTSmallBatch<F> {
     }
 }
 
+#[allow(refining_impl_trait_reachable)]
 impl<F> TwoAdicSubgroupDft<F> for Radix2DFTSmallBatch<F>
 where
     F: TwoAdicField,
 {
-    type Evaluations = RowMajorMatrix<F>;
-
-    fn dft_batch(&self, mut mat: RowMajorMatrix<F>) -> Self::Evaluations {
+    fn dft_batch(&self, mut mat: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
         let h = mat.height();
         let w = mat.width();
         let log_h = log2_strict_usize(h);
@@ -258,7 +257,7 @@ where
         mut mat: RowMajorMatrix<F>,
         added_bits: usize,
         shift: F,
-    ) -> Self::Evaluations {
+    ) -> RowMajorMatrix<F> {
         let h = mat.height();
         let w = mat.width();
         let log_h = log2_strict_usize(h);

@@ -142,10 +142,9 @@ where
     }
 }
 
+#[allow(refining_impl_trait_reachable)]
 impl<F: TwoAdicField + Ord> TwoAdicSubgroupDft<F> for Radix2DitParallel<F> {
-    type Evaluations = BitReversedMatrixView<RowMajorMatrix<F>>;
-
-    fn dft_batch(&self, mut mat: RowMajorMatrix<F>) -> Self::Evaluations {
+    fn dft_batch(&self, mut mat: RowMajorMatrix<F>) -> BitReversedMatrixView<RowMajorMatrix<F>> {
         let h = mat.height();
         let log_h = log2_strict_usize(h);
 
@@ -171,7 +170,7 @@ impl<F: TwoAdicField + Ord> TwoAdicSubgroupDft<F> for Radix2DitParallel<F> {
         mut mat: RowMajorMatrix<F>,
         added_bits: usize,
         shift: F,
-    ) -> Self::Evaluations {
+    ) -> BitReversedMatrixView<RowMajorMatrix<F>> {
         let w = mat.width;
         let h = mat.height();
         let log_h = log2_strict_usize(h);

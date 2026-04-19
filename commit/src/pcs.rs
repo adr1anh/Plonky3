@@ -50,9 +50,6 @@ where
     /// Data that the prover stores for committed polynomials, to help the prover with opening.
     type ProverData;
 
-    /// Type of the output of `get_evaluations_on_domain`.
-    type EvaluationsOnDomain<'a>: Matrix<Val<Self::Domain>> + 'a;
-
     /// The opening argument.
     type Proof: Clone + Serialize + DeserializeOwned;
 
@@ -161,7 +158,7 @@ where
         prover_data: &'a Self::ProverData,
         idx: usize,
         domain: Self::Domain,
-    ) -> Self::EvaluationsOnDomain<'a>;
+    ) -> impl Matrix<Val<Self::Domain>> + 'a;
 
     /// This is the same as `get_evaluations_on_domain` but without randomization.
     /// This is used for preprocessed columns which do not have to be randomized even when ZK is enabled.
@@ -170,7 +167,7 @@ where
         prover_data: &'a Self::ProverData,
         idx: usize,
         domain: Self::Domain,
-    ) -> Self::EvaluationsOnDomain<'a> {
+    ) -> impl Matrix<Val<Self::Domain>> + 'a {
         self.get_evaluations_on_domain(prover_data, idx, domain)
     }
 

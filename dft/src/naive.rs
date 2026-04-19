@@ -10,8 +10,8 @@ use crate::TwoAdicSubgroupDft;
 #[derive(Default, Clone, Debug)]
 pub struct NaiveDft;
 
+#[allow(refining_impl_trait_reachable)]
 impl<F: TwoAdicField> TwoAdicSubgroupDft<F> for NaiveDft {
-    type Evaluations = RowMajorMatrix<F>;
     fn dft_batch(&self, mat: RowMajorMatrix<F>) -> RowMajorMatrix<F> {
         let w = mat.width();
         let h = mat.height();
@@ -38,6 +38,7 @@ mod tests {
     use p3_baby_bear::BabyBear;
     use p3_field::{Field, PrimeCharacteristicRing};
     use p3_goldilocks::Goldilocks;
+    use p3_matrix::Matrix;
     use p3_matrix::dense::RowMajorMatrix;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
@@ -102,7 +103,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(1);
         let original = RowMajorMatrix::<F>::rand(&mut rng, 8, 3);
         let dft = NaiveDft.coset_dft_batch(original.clone(), generator);
-        let idft = NaiveDft.coset_idft_batch(dft, generator);
+        let idft = NaiveDft.coset_idft_batch(dft.to_row_major_matrix(), generator);
         assert_eq!(original, idft);
     }
 }

@@ -25,17 +25,6 @@ use crate::util::{coset_shift_cols, divide_by_height};
 /// parallel feature) different implementation may be faster. Hence depending on your use case
 /// you may want to be using `Radix2Dit, Radix2DitParallel, RecursiveDft` or `Radix2Bowers`.
 pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
-    /// The matrix type used to store the result of a batched DFT operation.
-    ///
-    /// This type represents a matrix of field elements, used to hold the evaluations
-    /// of multiple polynomials over a two-adic subgroup or its coset.
-    /// It is always owned and supports efficient access and transformation
-    /// patterns used in FFT-based algorithms.
-    ///
-    /// Most implementations use `RowMajorMatrix<F>` or a wrapper like
-    /// `BitReversedMatrixView<RowMajorMatrix<F>>` to allow in-place bit-reversed access.
-    type Evaluations: BitReversibleMatrix<F> + 'static;
-
     /// Compute the discrete Fourier transform (DFT) of `vec`.
     ///
     /// #### Mathematical Description
@@ -58,7 +47,7 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// Let `H` denote the unique multiplicative subgroup of order `mat.height()`.
     /// Treating each column of `mat` as the coefficients of a polynomial, compute the
     /// evaluations of those polynomials on the subgroup `H`.
-    fn dft_batch(&self, mat: RowMajorMatrix<F>) -> Self::Evaluations;
+    fn dft_batch(&self, mat: RowMajorMatrix<F>) -> impl BitReversibleMatrix<F> + 'static + use<Self, F>;
 
     /// Compute the "coset DFT" of `vec`.
     ///
@@ -80,7 +69,11 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// Let `H` denote the unique multiplicative subgroup of order `mat.height()`.
     /// Treating each column of `mat` as the coefficients of a polynomial, compute the
     /// evaluations of those polynomials on the coset `shift * H`.
-    fn coset_dft_batch(&self, mut mat: RowMajorMatrix<F>, shift: F) -> Self::Evaluations {
+    fn coset_dft_batch(
+        &self,
+        mut mat: RowMajorMatrix<F>,
+        shift: F,
+    ) -> impl BitReversibleMatrix<F> + 'static + use<Self, F> {
         // Observe that
         //     y_i = \sum_j c_j (s g^i)^j
         //         = \sum_j (c_j s^j) (g^i)^j
@@ -184,7 +177,11 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
     /// use case. We can also view it as treating columns of `mat` as evaluations
     /// over a coset `gH` and then computing the evaluations of those polynomials
     /// on the coset `gK`.
-    fn lde_batch(&self, mat: RowMajorMatrix<F>, added_bits: usize) -> Self::Evaluations {
+    fn lde_batch(
+        &self,
+        mat: RowMajorMatrix<F>,
+        added_bits: usize,
+    ) -> impl BitReversibleMatrix<F> + 'static + use<Self, F> {
         // This is a better default as several implementations have a custom implementation
         // of `coset_lde_batch` and often the fact that the shift is `ONE` won't give any
         // performance improvements anyway.
@@ -228,7 +225,7 @@ pub trait TwoAdicSubgroupDft<F: TwoAdicField>: Clone + Default {
         mat: RowMajorMatrix<F>,
         added_bits: usize,
         shift: F,
-    ) -> Self::Evaluations {
+    ) -> impl BitReversibleMatrix<F> + 'static + use<Self, F> {
         // To briefly explain the additional interpretation, start with the evaluations of the polynomial
         // `f(x)` over `gH`. If we reinterpret the evaluations as being over the subgroup `H`, this is equivalent to
         // switching our polynomial to `f1(x) = f(g x)`. The output of the iDFT will be the coefficients of

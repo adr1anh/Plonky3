@@ -175,13 +175,15 @@ impl<MP: FieldParameters + TwoAdicData> RecursiveDft<MontyField31<MP>> {
 ///
 /// Hence the only bit-reversal that needs to take place is on the input.
 ///
+#[allow(refining_impl_trait_reachable)]
 impl<MP: MontyParameters + FieldParameters + TwoAdicData> TwoAdicSubgroupDft<MontyField31<MP>>
     for RecursiveDft<MontyField31<MP>>
 {
-    type Evaluations = BitReversedMatrixView<RowMajorMatrix<MontyField31<MP>>>;
-
     #[instrument(skip_all, fields(dims = %mat.dimensions(), added_bits))]
-    fn dft_batch(&self, mut mat: RowMajorMatrix<MontyField31<MP>>) -> Self::Evaluations
+    fn dft_batch(
+        &self,
+        mut mat: RowMajorMatrix<MontyField31<MP>>,
+    ) -> BitReversedMatrixView<RowMajorMatrix<MontyField31<MP>>>
     where
         MP: MontyParameters + FieldParameters + TwoAdicData,
     {
@@ -259,7 +261,7 @@ impl<MP: MontyParameters + FieldParameters + TwoAdicData> TwoAdicSubgroupDft<Mon
         mat: RowMajorMatrix<MontyField31<MP>>,
         added_bits: usize,
         shift: MontyField31<MP>,
-    ) -> Self::Evaluations {
+    ) -> BitReversedMatrixView<RowMajorMatrix<MontyField31<MP>>> {
         let nrows = mat.height();
         let ncols = mat.width();
         let result_nrows = nrows << added_bits;

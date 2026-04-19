@@ -14,8 +14,8 @@ type C = Complex<F>;
 #[derive(Debug, Default, Clone)]
 pub struct Mersenne31ComplexRadix2Dit;
 
+#[allow(refining_impl_trait_reachable)]
 impl TwoAdicSubgroupDft<C> for Mersenne31ComplexRadix2Dit {
-    type Evaluations = RowMajorMatrix<C>;
     fn dft_batch(&self, mut mat: RowMajorMatrix<C>) -> RowMajorMatrix<C> {
         let h = mat.height();
         let log_h = log2_strict_usize(h);

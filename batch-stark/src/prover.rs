@@ -706,27 +706,29 @@ where
 /// disjoint mutable pointer access, avoiding an intermediate `collect`.
 #[instrument(name = "compute quotient polynomial", skip_all)]
 #[allow(clippy::too_many_arguments)]
-pub fn quotient_values<SC, A, Mat, LG>(
+pub fn quotient_values<SC, A, TraceMat, PermMat, PreprocessedMat, LG>(
     pcs: &SC::Pcs,
     air: &A,
     public_values: &[Val<SC>],
     layout: AirLayout,
     trace_domain: Domain<SC>,
     quotient_domain: Domain<SC>,
-    trace_on_quotient_domain: &Mat,
-    opt_permutation_on_quotient_domain: Option<&Mat>,
+    trace_on_quotient_domain: &TraceMat,
+    opt_permutation_on_quotient_domain: Option<&PermMat>,
     lookups: &[Lookup<Val<SC>>],
     permutation_vals: &[SC::Challenge],
     lookup_gadget: &LG,
     permutation_challenges: &[SC::Challenge],
-    preprocessed_on_quotient_domain: Option<&Mat>,
+    preprocessed_on_quotient_domain: Option<&PreprocessedMat>,
     alpha: SC::Challenge,
 ) -> Vec<SC::Challenge>
 where
     SC: SGC,
     A: Air<SymbolicAirBuilder<Val<SC>, SC::Challenge>>
         + for<'a> Air<ProverConstraintFolderWithLookups<'a, SC>>,
-    Mat: Matrix<Val<SC>> + Sync,
+    TraceMat: Matrix<Val<SC>> + Sync,
+    PermMat: Matrix<Val<SC>> + Sync,
+    PreprocessedMat: Matrix<Val<SC>> + Sync,
     LG: LookupGadget + Sync,
     SymbolicExpressionExt<Val<SC>, SC::Challenge>: Algebra<SC::Challenge>,
 {

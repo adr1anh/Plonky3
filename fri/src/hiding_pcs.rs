@@ -9,10 +9,9 @@ use p3_dft::TwoAdicSubgroupDft;
 use p3_field::coset::TwoAdicMultiplicativeCoset;
 use p3_field::{ExtensionField, TwoAdicField, batch_multiplicative_inverse};
 use p3_matrix::Matrix;
-use p3_matrix::bitrev::{BitReversalPerm, BitReversibleMatrix};
-use p3_matrix::dense::{DenseMatrix, RowMajorMatrix, RowMajorMatrixCow};
+use p3_matrix::bitrev::BitReversibleMatrix;
+use p3_matrix::dense::{DenseMatrix, RowMajorMatrix};
 use p3_matrix::horizontally_truncated::HorizontallyTruncated;
-use p3_matrix::row_index_mapped::RowIndexMappedView;
 use p3_util::zip_eq::zip_eq;
 use rand::distr::{Distribution, StandardUniform};
 use rand::{Rng, RngExt};
@@ -81,8 +80,6 @@ where
     type Domain = TwoAdicMultiplicativeCoset<Val>;
     type Commitment = InputMmcs::Commitment;
     type ProverData = InputMmcs::ProverData<RowMajorMatrix<Val>>;
-    type EvaluationsOnDomain<'a> =
-        HorizontallyTruncated<Val, RowIndexMappedView<BitReversalPerm, RowMajorMatrixCow<'a, Val>>>;
     /// The first item contains the openings of the random polynomials added by this wrapper.
     /// The second item is the usual FRI proof.
     type Proof = (
@@ -256,7 +253,7 @@ where
         prover_data: &'a Self::ProverData,
         idx: usize,
         domain: Self::Domain,
-    ) -> Self::EvaluationsOnDomain<'a> {
+    ) -> impl Matrix<Val> + 'a {
         let inner_evals = <TwoAdicFriPcs<Val, Dft, InputMmcs, FriMmcs> as Pcs<
             Challenge,
             Challenger,
@@ -274,7 +271,7 @@ where
         prover_data: &'a Self::ProverData,
         idx: usize,
         domain: Self::Domain,
-    ) -> Self::EvaluationsOnDomain<'a> {
+    ) -> impl Matrix<Val> + 'a {
         let inner_evals = <TwoAdicFriPcs<Val, Dft, InputMmcs, FriMmcs> as Pcs<
             Challenge,
             Challenger,
