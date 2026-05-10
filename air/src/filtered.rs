@@ -61,6 +61,12 @@ impl<AB: AirBuilder> AirBuilder for FilteredAirBuilder<'_, AB> {
         self.inner.assert_zero(self.condition() * x.into());
     }
 
+    fn assert_zeros<const N: usize, I: Into<Self::Expr>>(&mut self, array: [I; N]) {
+        let condition = self.condition();
+        self.inner
+            .assert_zeros(array.map(|elem| condition.dup() * elem.into()));
+    }
+
     fn public_values(&self) -> &[Self::PublicVar] {
         self.inner.public_values()
     }
@@ -83,6 +89,15 @@ impl<AB: ExtensionBuilder> ExtensionBuilder for FilteredAirBuilder<'_, AB> {
         let condition: AB::Expr = self.condition();
 
         self.inner.assert_zero_ext(ext_x * condition);
+    }
+
+    fn assert_zeros_ext<const N: usize, I>(&mut self, array: [I; N])
+    where
+        I: Into<Self::ExprEF>,
+    {
+        let condition: AB::Expr = self.condition();
+        self.inner
+            .assert_zeros_ext(array.map(|elem| elem.into() * condition.dup()));
     }
 }
 

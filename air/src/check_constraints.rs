@@ -3,7 +3,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt;
 
-use p3_field::{ExtensionField, Field};
+use p3_field::{Dup, ExtensionField, Field};
 use p3_matrix::Matrix;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
 use p3_matrix::stack::ViewPair;
@@ -415,6 +415,21 @@ impl<F: Field, EF: ExtensionField<F>> NamedAirBuilder for DebugConstraintBuilder
         self.assert_zero_named(x.into() - y.into(), name);
     }
 
+    fn assert_eq_arrays_named<const M: usize, I1, I2, Ns>(
+        &mut self,
+        lhs: [I1; M],
+        rhs: [I2; M],
+        name: Ns,
+    ) where
+        I1: Dup + Into<Self::Expr>,
+        I2: Dup + Into<Self::Expr>,
+        Ns: crate::Namespace,
+    {
+        let diff: [Self::Expr; M] =
+            core::array::from_fn(|i| lhs[i].dup().into() - rhs[i].dup().into());
+        self.assert_zeros_named(diff, name);
+    }
+
     fn assert_bool_named<I, N>(&mut self, x: I, name: N)
     where
         I: Into<Self::Expr>,
@@ -452,6 +467,16 @@ impl<F: Field, EF: ExtensionField<F>> NamedExtensionBuilder for DebugConstraintB
             });
         }
         self.constraint_index += 1;
+    }
+
+    fn assert_zeros_ext_named<const M: usize, I, Ns>(&mut self, array: [I; M], name: Ns)
+    where
+        I: Into<Self::ExprEF>,
+        Ns: crate::Namespace,
+    {
+        for (i, elem) in array.into_iter().enumerate() {
+            self.assert_zero_ext_named(elem, name.name(|| format!("[{i}]")));
+        }
     }
 
     fn assert_eq_ext_named<I1, I2, N>(&mut self, x: I1, y: I2, name: N)

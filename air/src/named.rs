@@ -149,6 +149,17 @@ pub trait NamedAirBuilder: AirBuilder {
         I2: Into<Self::Expr>,
         N: Name;
 
+    /// Assert that two arrays are equal element-wise, with a label.
+    fn assert_eq_arrays_named<const M: usize, I1, I2, Ns>(
+        &mut self,
+        lhs: [I1; M],
+        rhs: [I2; M],
+        name: Ns,
+    ) where
+        I1: Dup + Into<Self::Expr>,
+        I2: Dup + Into<Self::Expr>,
+        Ns: Namespace;
+
     /// Assert boolean with a label.
     fn assert_bool_named<I, N>(&mut self, x: I, name: N)
     where
@@ -203,6 +214,19 @@ impl<T: PassthroughNamedAirBuilder> NamedAirBuilder for T {
         N: Name,
     {
         self.assert_eq(x, y);
+    }
+
+    fn assert_eq_arrays_named<const M: usize, I1, I2, Ns>(
+        &mut self,
+        lhs: [I1; M],
+        rhs: [I2; M],
+        _name: Ns,
+    ) where
+        I1: Dup + Into<Self::Expr>,
+        I2: Dup + Into<Self::Expr>,
+        Ns: Namespace,
+    {
+        self.assert_eq_arrays(lhs, rhs);
     }
 
     fn assert_bool_named<I, N>(&mut self, x: I, _name: N)
@@ -261,6 +285,21 @@ impl<AB: NamedAirBuilder> NamedAirBuilder for FilteredAirBuilder<'_, AB> {
             .assert_zero_named(self.condition() * (x.into() - y.into()), name);
     }
 
+    fn assert_eq_arrays_named<const M: usize, I1, I2, Ns>(
+        &mut self,
+        lhs: [I1; M],
+        rhs: [I2; M],
+        name: Ns,
+    ) where
+        I1: Dup + Into<Self::Expr>,
+        I2: Dup + Into<Self::Expr>,
+        Ns: Namespace,
+    {
+        let diff: [Self::Expr; M] =
+            core::array::from_fn(|i| lhs[i].dup().into() - rhs[i].dup().into());
+        self.assert_zeros_named(diff, name);
+    }
+
     fn assert_bool_named<I, N>(&mut self, x: I, name: N)
     where
         I: Into<Self::Expr>,
@@ -292,6 +331,12 @@ pub trait NamedExtensionBuilder: ExtensionBuilder + NamedAirBuilder {
         I: Into<Self::ExprEF>,
         N: Name;
 
+    /// Assert all elements are zero over the extension field, with a label.
+    fn assert_zeros_ext_named<const M: usize, I, Ns>(&mut self, array: [I; M], name: Ns)
+    where
+        I: Into<Self::ExprEF>,
+        Ns: Namespace;
+
     /// Assert equality over the extension field, with a label.
     fn assert_eq_ext_named<I1, I2, N>(&mut self, x: I1, y: I2, name: N)
     where
@@ -313,6 +358,14 @@ impl<T: PassthroughNamedAirBuilder + ExtensionBuilder> NamedExtensionBuilder for
         N: Name,
     {
         self.assert_zero_ext(x);
+    }
+
+    fn assert_zeros_ext_named<const M: usize, I, Ns>(&mut self, array: [I; M], _name: Ns)
+    where
+        I: Into<Self::ExprEF>,
+        Ns: Namespace,
+    {
+        self.assert_zeros_ext(array);
     }
 
     fn assert_eq_ext_named<I1, I2, N>(&mut self, x: I1, y: I2, _name: N)
@@ -342,6 +395,16 @@ impl<AB: NamedExtensionBuilder> NamedExtensionBuilder for FilteredAirBuilder<'_,
         let ext_x: Self::ExprEF = x.into();
         let condition: AB::Expr = self.condition();
         self.inner.assert_zero_ext_named(ext_x * condition, name);
+    }
+
+    fn assert_zeros_ext_named<const M: usize, I, Ns>(&mut self, array: [I; M], name: Ns)
+    where
+        I: Into<Self::ExprEF>,
+        Ns: Namespace,
+    {
+        let condition: AB::Expr = self.condition();
+        let scaled: [Self::ExprEF; M] = array.map(|elem| elem.into() * condition.dup());
+        self.inner.assert_zeros_ext_named(scaled, name);
     }
 
     fn assert_eq_ext_named<I1, I2, N>(&mut self, x: I1, y: I2, name: N)
